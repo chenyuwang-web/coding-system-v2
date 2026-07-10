@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>料號編碼系統 v2</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Microsoft JhengHei", sans-serif; background: #f0f2f5; min-height: 100vh; }
+
+.header { background: linear-gradient(135deg, #1a73e8, #0d47a1); color: #fff; padding: 20px 30px; text-align: center; }
+.header h1 { font-size: 1.6rem; }
+.header p { font-size: 0.9rem; opacity: 0.85; margin-top: 4px; }
+.sync-status { font-size: 0.8rem; opacity: 0.85; margin-top: 4px; }
+.sync-ok { color: #a5d6a7; }
+.sync-err { color: #ef9a9a; }
+
+.container { max-width: 1280px; margin: 30px auto; padding: 0 20px; }
+
+.card { background: #fff; border-radius: 12px; padding: 28px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 24px; }
+.card h2 { font-size: 1.2rem; color: #333; margin-bottom: 6px; border-left: 4px solid #1a73e8; padding-left: 12px; }
+.card .card-sub { font-size: 0.85rem; color: #777; margin: 6px 0 20px 16px; }
+
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 700px) { .form-grid { grid-template-columns: 1fr; } }
+
+.form-group { display: flex; flex-direction: column; }
+.form-group label { font-size: 0.85rem; color: #555; margin-bottom: 6px; font-weight: 600; }
+.form-group .hint { font-size: 0.75rem; color: #999; margin-top: 4px; }
+.form-group select, .form-group input {
+    padding: 10px 14px; border: 1.5px solid #ddd; border-radius: 8px;
+    font-size: 1rem; background: #fafafa; transition: border-color 0.2s;
+}
+.form-group select:focus, .form-group input:focus { border-color: #1a73e8; outline: none; background: #fff; }
+
+.preview-box { background: #e8f0fe; border-radius: 10px; padding: 20px; text-align: center; margin-top: 20px; }
+.preview-box .label { font-size: 0.85rem; color: #555; }
+.preview-box .code { font-size: 1.9rem; font-weight: 700; color: #1a73e8; letter-spacing: 2px; margin-top: 6px; font-family: "Consolas", monospace; word-break: break-all; }
+.preview-box .breakdown { font-size: 0.78rem; color: #777; margin-top: 8px; }
+
+.btn-row { display: flex; gap: 12px; margin-top: 20px; justify-content: center; flex-wrap: wrap; }
+.btn { padding: 12px 32px; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+.btn-primary { background: #1a73e8; color: #fff; }
+.btn-primary:hover { background: #1558b0; }
+.btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+.btn-secondary { background: #e0e0e0; color: #333; }
+.btn-secondary:hover { background: #d0d0d0; }
+.btn-sm { padding: 6px 16px; font-size: 0.85rem; }
+
+.msg { padding: 12px 16px; border-radius: 8px; margin-top: 14px; font-size: 0.9rem; display: none; }
+.msg-success { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+.msg-error { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+.msg-info { background: #e8f0fe; color: #1a73e8; border: 1px solid #aac4f5; }
+
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th { background: #f5f5f5; padding: 10px 14px; text-align: left; font-size: 0.85rem; color: #555; border-bottom: 2px solid #ddd; white-space: nowrap; }
+td { padding: 10px 14px; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+tr:hover td { background: #f9f9f9; }
+.code-cell { font-family: "Consolas", monospace; font-weight: 600; color: #1a73e8; letter-spacing: 1px; white-space: nowrap; }
+.cat-badge { display:inline-block; font-size:0.72rem; font-weight:700; padding:2px 8px; border-radius:10px; background:#e8f0fe; color:#1a73e8; }
+.delete-btn { color: #d32f2f; cursor: pointer; border: none; background: none; font-size: 0.85rem; }
+.delete-btn:hover { text-decoration: underline; }
+.edit-btn { color: #1a73e8; cursor: pointer; border: none; background: none; font-size: 0.85rem; }
+.edit-btn:hover { text-decoration: underline; }
+.save-btn { color: #2e7d32; cursor: pointer; border: none; background: none; font-size: 0.85rem; font-weight: 600; }
+.cancel-btn { color: #888; cursor: pointer; border: none; background: none; font-size: 0.85rem; }
+.action-btns { display: flex; gap: 6px; white-space: nowrap; }
+.empty-state { text-align: center; color: #999; padding: 30px; }
+
+.group-header { background: #e8f0fe; padding: 12px 16px; border-radius: 8px; margin-top: 10px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; transition: background 0.2s; }
+.group-header:hover { background: #d2e3fc; }
+.group-header .group-title { font-weight: 600; color: #1a73e8; font-size: 0.95rem; }
+.group-header .group-count { font-size: 0.8rem; color: #666; }
+.group-header .arrow { transition: transform 0.2s; font-size: 0.8rem; color: #888; }
+.group-header.open .arrow { transform: rotate(90deg); }
+.group-body { display: none; }
+.group-body.open { display: block; }
+
+.search-bar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.search-bar input { flex: 1; min-width: 200px; padding: 10px 14px; border: 1.5px solid #ddd; border-radius: 8px; font-size: 0.95rem; }
+.search-bar select { padding: 10px 14px; border: 1.5px solid #ddd; border-radius: 8px; font-size: 0.9rem; background:#fff; }
+
+.stats { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.stat-item { background: #f5f5f5; padding: 10px 18px; border-radius: 8px; font-size: 0.85rem; color: #555; }
+.stat-item strong { color: #1a73e8; font-size: 1.1rem; }
+
+.export-row { display: flex; gap: 10px; justify-content: flex-end; margin-bottom: 12px; flex-wrap: wrap; }
+
+.bulk-action-bar { display: none; align-items: center; gap: 10px; flex-wrap: wrap; position: fixed; bottom: 0; left: 0; right: 0; z-index: 999; background: #1a73e8; border-top: 3px solid #0d47a1; padding: 12px 32px; box-shadow: 0 -4px 16px rgba(0,0,0,0.18); }
+.bulk-action-bar.show { display: flex; }
+.bulk-action-bar .bulk-label { font-size: 0.95rem; font-weight: 700; color: #fff; white-space: nowrap; margin-right: 4px; }
+.bulk-action-bar select { padding: 6px 10px; border: none; border-radius: 6px; font-size: 0.85rem; }
+.bulk-confirm-btn { padding: 8px 20px; background: #fff; color: #1a73e8; border: none; border-radius: 6px; font-size: 0.88rem; font-weight: 700; cursor: pointer; }
+.bulk-delete-btn { padding: 8px 20px; background: #d32f2f; color: #fff; border: none; border-radius: 6px; font-size: 0.88rem; font-weight: 700; cursor: pointer; }
+.bulk-cancel-btn { padding: 8px 16px; background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.5); border-radius: 6px; font-size: 0.85rem; cursor: pointer; margin-left: auto; }
+body.has-bulk-bar { padding-bottom: 64px; }
+.row-checkbox { accent-color: #1a73e8; cursor: pointer; }
+
+.tab-row { display: flex; gap: 0; margin-bottom: 18px; border-bottom: 2px solid #eee; }
+.tab-btn { padding: 10px 20px; border: none; background: none; font-size: 0.95rem; color: #888; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; font-weight: 600; }
+.tab-btn.active { color: #1a73e8; border-bottom-color: #1a73e8; }
+
+.import-area { border: 2px dashed #ccc; border-radius: 10px; padding: 20px; text-align: center; transition: all 0.2s; cursor: pointer; }
+.import-area:hover, .import-area.dragover { border-color: #1a73e8; background: #e8f0fe; }
+.import-area p { color: #777; font-size: 0.9rem; margin-bottom: 8px; }
+.import-area .hint { font-size: 0.8rem; color: #aaa; }
+.import-textarea { width: 100%; min-height: 110px; border: 1.5px solid #ddd; border-radius: 8px; padding: 12px; font-family: "Consolas", monospace; font-size: 0.9rem; resize: vertical; margin-top: 12px; }
+.import-preview { margin-top: 14px; }
+.import-preview table { font-size: 0.85rem; }
+.import-preview .valid { color: #2e7d32; }
+.import-preview .invalid { color: #c62828; }
+.import-preview .duplicate { color: #e65100; }
+
+.lookup-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.lookup-tab { padding: 7px 14px; border: 1px solid #ddd; background: #fafafa; border-radius: 20px; font-size: 0.82rem; cursor: pointer; color: #555; }
+.lookup-tab.active { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+.lookup-add-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.lookup-add-row input { padding: 8px 12px; border: 1.5px solid #ddd; border-radius: 6px; font-size: 0.88rem; }
+
+.bom-product-group { border: 1px solid #d2e3fc; border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+.bom-product-header { background: linear-gradient(135deg, #e8f0fe, #d2e3fc); padding: 14px 18px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; flex-wrap:wrap; gap:8px; }
+.bom-product-header:hover { background: linear-gradient(135deg, #d2e3fc, #bbdefb); }
+.bom-product-header .product-info { display: flex; align-items: center; gap: 10px; flex-wrap:wrap; }
+.bom-product-header .product-code { font-family: Consolas, monospace; font-weight: 700; color: #1a73e8; font-size: 1rem; letter-spacing: 1px; }
+.bom-product-header .product-desc { color: #444; font-size: 0.9rem; }
+.bom-product-header .product-count { font-size: 0.8rem; color: #666; background: #fff; padding: 3px 10px; border-radius: 12px; }
+.bom-product-body { display: none; padding: 10px 18px 16px; }
+.bom-product-body.open { display: block; }
+.bom-node { display:flex; align-items:center; gap:8px; padding:6px 0; flex-wrap:wrap; border-bottom:1px dashed #eee; }
+.bom-node .bom-code { font-family:Consolas,monospace; font-weight:700; color:#1a73e8; font-size:0.85rem; }
+.bom-node .bom-desc { font-size:0.82rem; color:#555; }
+.bom-node .bom-meta { font-size:0.75rem; color:#999; }
+.bom-node .bom-actions { margin-left:auto; display:flex; gap:6px; align-items:center; }
+.unassigned-section .bom-product-header { background: #f5f5f5; }
+.assign-parent-select { padding: 5px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.78rem; max-width: 220px; }
+.assign-btn { font-size: 0.78rem; color: #1a73e8; cursor: pointer; border: none; background: none; text-decoration: underline; }
+.qty-input { width: 60px; padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.78rem; }
+.unit-input { width: 50px; padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.78rem; }
+
+.loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.85); display: flex; justify-content: center; align-items: center; z-index: 9999; font-size: 1.2rem; color: #1a73e8; }
+.modal-wrap { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:1000; justify-content:center; align-items:flex-start; padding:40px 20px; overflow-y:auto; }
+.modal-box { background:#fff; border-radius:12px; max-width:900px; width:100%; max-height:85vh; overflow-y:auto; }
+.modal-header { padding:16px 24px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; background:#fff; }
+.modal-header h3 { font-size:1.05rem; color:#333; }
+.modal-close { border:none; background:none; font-size:1.3rem; cursor:pointer; color:#888; }
+.modal-body { padding:16px 24px; }
+</style>
+</head>
+<body>
+
+<div id="loadingOverlay" class="loading-overlay">載入資料中...</div>
+
+<div class="header">
+    <h1>料號編碼系統 v2</h1>
+    <p>依「編碼原則」建立：8 大類別（A/B 成品、C/X 半成品、D 原料、E 物料、F 客供料、Z 耗材費用）</p>
+    <div class="sync-status" id="syncStatus"></div>
+</div>
+
+<div class="container">
+
+    <!-- 建立新料號 -->
+    <div class="card">
+        <h2>建立新料號</h2>
+        <p class="card-sub">先選類別，系統會自動帶出該類別對應的下拉欄位與碼長規則</p>
+        <div class="form-grid">
+            <div class="form-group">
+                <label>類別</label>
+                <select id="category" onchange="onCategoryChange()">
+                    <option value="">-- 請選擇類別 --</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>描述（選填）</label>
+                <input type="text" id="itemDesc" placeholder="例如：9吋光罩盒本體">
+            </div>
+        </div>
+        <div id="dynamicSegments" class="form-grid" style="margin-top:18px;"></div>
+        <div class="preview-box">
+            <div class="label">編碼預覽</div>
+            <div class="code" id="itemPreview">------</div>
+            <div class="breakdown" id="itemBreakdown"></div>
+        </div>
+        <div id="itemMsg" class="msg"></div>
+        <div class="btn-row">
+            <button class="btn btn-primary" id="addItemBtn" onclick="addItem()" disabled>確認新增</button>
+            <button class="btn btn-secondary" onclick="resetItemForm()">清除重填</button>
+        </div>
+    </div>
+
+    <!-- 代碼對照表管理 -->
+    <div class="card">
+        <h2>代碼對照表管理</h2>
+        <p class="card-sub">管理下拉選單裡的產品分類、產品線、製程碼、材質類別、客戶碼等清單，可自行新增/刪除</p>
+        <div class="lookup-tabs" id="lookupTabs"></div>
+        <div class="lookup-add-row">
+            <input type="text" id="lookupNewCode" placeholder="代碼 (例如 RSP)" maxlength="10" style="width:130px;">
+            <input type="text" id="lookupNewLabel" placeholder="名稱 (例如 Reticle SMIF Pod)" style="flex:1;min-width:180px;">
+            <input type="text" id="lookupNewNote" placeholder="備註（選填）" style="flex:1;min-width:180px;">
+            <button class="btn btn-primary btn-sm" onclick="addLookupItem()">＋ 新增</button>
+        </div>
+        <div id="lookupMsg" class="msg"></div>
+        <div id="lookupTableWrap"></div>
+    </div>
+
+    <!-- 批次匯入 -->
+    <div class="card">
+        <h2>批次匯入既有料號</h2>
+        <div class="tab-row">
+            <button class="tab-btn active" onclick="switchImportTab('paste',this)">貼上料號</button>
+            <button class="tab-btn" onclick="switchImportTab('file',this)">上傳 Excel / CSV</button>
+        </div>
+        <div id="importPasteTab">
+            <p style="font-size:0.85rem;color:#555;margin-bottom:8px;">每行一筆，可只貼料號，或用逗號/Tab 分隔「料號, 描述」。系統會依第1碼自動判別類別。</p>
+            <textarea class="import-textarea" id="bulkInput" placeholder="範例：&#10;APRSP000900001&#10;APRSP000900001, 9吋光罩盒&#10;DABS000001&#9;ABS原料"></textarea>
+            <div class="btn-row" style="justify-content:flex-start;">
+                <button class="btn btn-secondary" onclick="previewBulk()">預覽判讀結果</button>
+                <button class="btn btn-primary" id="bulkAddBtn" onclick="confirmBulk()" style="display:none;">確認匯入</button>
+                <button class="btn btn-secondary" onclick="clearBulk()">清除</button>
+            </div>
+            <div id="bulkMsg" class="msg"></div>
+            <div id="bulkPreview" class="import-preview"></div>
+        </div>
+        <div id="importFileTab" style="display:none;">
+            <div class="import-area" id="dropZone" onclick="document.getElementById('xlsxFile').click();"
+                 ondragover="event.preventDefault();this.classList.add('dragover');"
+                 ondragleave="this.classList.remove('dragover');"
+                 ondrop="event.preventDefault();this.classList.remove('dragover');handleFileDrop(event);">
+                <p>點擊選擇檔案，或將檔案拖曳到此處</p>
+                <p class="hint">支援 .xlsx / .csv，系統會自動搜尋符合料號格式的欄位</p>
+            </div>
+            <input type="file" id="xlsxFile" accept=".xlsx,.csv" style="display:none" onchange="handleFileSelect(event)">
+            <div id="fileMsg" class="msg"></div>
+            <div id="filePreview" class="import-preview"></div>
+            <div class="btn-row" style="justify-content:flex-start;">
+                <button class="btn btn-primary" id="fileAddBtn" onclick="confirmFileBulk()" style="display:none;">確認匯入</button>
+                <button class="btn btn-secondary" onclick="clearFileImport()">清除</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 成品/半成品/物料 歸屬 -->
+    <div class="card">
+        <h2>成品／半成品／物料歸屬（BOM 結構）</h2>
+        <p class="card-sub">將半成品、原料、物料、客供料、耗材指派到所屬的上一階料號，建立完整 BOM 樹</p>
+        <div id="bomMsg" class="msg"></div>
+        <div id="bomTreeWrap"></div>
+    </div>
+
+    <!-- 已建立料號清單 -->
+    <div class="card">
+        <h2>已建立料號清單</h2>
+        <div class="stats" id="stats"></div>
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="搜尋料號或描述..." oninput="renderTable()">
+            <select id="filterCategory" onchange="renderTable()">
+                <option value="">全部類別</option>
+            </select>
+            <select id="groupBy" onchange="renderTable()">
+                <option value="category">依類別分組</option>
+                <option value="none">不分組（平面列表）</option>
+            </select>
+        </div>
+        <div class="bulk-action-bar" id="bulkActionBar">
+            <span class="bulk-label" id="bulkActionLabel">已選 0 筆</span>
+            <button class="bulk-delete-btn" onclick="bulkDelete()">🗑 批次刪除</button>
+            <button class="bulk-cancel-btn" onclick="clearSelection()">✕ 取消選取</button>
+        </div>
+        <div class="export-row">
+            <button class="btn btn-secondary" onclick="refreshAll()">🔄 重新整理</button>
+            <button class="btn btn-secondary" onclick="exportAllXLSX()">📊 匯出全部 Excel</button>
+            <button class="btn btn-secondary" id="exportSelectedBtn" onclick="exportSelectedXLSX()" disabled>匯出已勾選 Excel (0)</button>
+            <button class="btn btn-secondary" onclick="exportBomXLSX()">📊 匯出 BOM 結構 Excel</button>
+            <button class="btn btn-secondary" onclick="openTrash()">🗑 回收桶</button>
+        </div>
+        <div id="listMsg" class="msg" style="margin-bottom:10px;"></div>
+        <div id="tableWrap"></div>
+    </div>
+</div>
+
+<div class="modal-wrap" id="modalWrap">
+    <div class="modal-box">
+        <div class="modal-header"><h3 id="modalTitle"></h3><button class="modal-close" onclick="closeModal()">✕</button></div>
+        <div class="modal-body" id="modalBody"></div>
+    </div>
+</div>
+
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script>
+// ============================================================
+// Supabase 設定（沿用同一 Supabase 專案，新資料表 coding_items / lookup_items / operation_logs）
+// ============================================================
+const SUPABASE_URL = 'https://aspoqsbwqdxqqkxzglal.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_1XP-LYJ5HngskTu36zPZ7A_uwF2IhY0';
+const TBL_ITEMS = 'coding_items';
+const TBL_LOOKUP = 'lookup_items';
+const TBL_LOGS = 'operation_logs';
+
+const _H = () => ({ 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` });
+const _HJ = () => ({ ..._H(), 'Content-Type': 'application/json' });
+
+const DB = {
+    async select(table, opts = {}) {
+        let url = `${SUPABASE_URL}/rest/v1/${table}?select=*`;
+        if (opts.filter) url += `&${opts.filter}`;
+        url += opts.order ? `&order=${opts.order}` : '';
+        const res = await fetch(url, { headers: _H() });
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+    },
+    async insert(table, rows, opts = {}) {
+        const body = Array.isArray(rows) ? rows : [rows];
+        if (!body.length) return [];
+        const conflict = opts.onConflict ? `?on_conflict=${opts.onConflict}` : '';
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}${conflict}`, {
+            method: 'POST',
+            headers: { ..._HJ(), 'Prefer': (opts.ignoreDup ? 'resolution=ignore-duplicates,' : '') + 'return=representation' },
+            body: JSON.stringify(body)
+        });
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+    },
+    async update(table, matchCol, matchVal, fields) {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${matchCol}=eq.${encodeURIComponent(matchVal)}`, {
+            method: 'PATCH', headers: { ..._HJ(), 'Prefer': 'return=representation' }, body: JSON.stringify(fields)
+        });
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+    },
+    async remove(table, matchCol, matchVal) {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${matchCol}=eq.${encodeURIComponent(matchVal)}`, {
+            method: 'DELETE', headers: _H()
+        });
+        if (!res.ok) throw new Error(await res.text());
+    }
+};
+
+const Logger = {
+    log(action, code, detail) {
+        try { fetch(`${SUPABASE_URL}/rest/v1/${TBL_LOGS}`, { method: 'POST', headers: { ..._HJ(), 'Prefer': 'return=minimal' }, body: JSON.stringify({ action, code: code || null, detail: detail || {} }) }).catch(() => {}); } catch {}
+    }
+};
+
+// ============================================================
+// 類別定義（依 產品編碼20260709.xlsx 編碼原則整理）
+// ============================================================
+const CATEGORY_DEFS = {
+    A: { label: '成品(新品)', totalLen: 14, segments: [
+        { key:'acc', label:'會計碼', type:'fixed', value:'A', len:1 },
+        { key:'class', label:'產品分類', type:'lookup', list:'product_class_a', len:1 },
+        { key:'line', label:'產品線代碼（成品名稱）', type:'lookup', list:'product_line', len:3 },
+        { key:'spec', label:'尺寸/型號', type:'text', len:4, placeholder:'例如 0009（9碼需4碼）' },
+        { key:'serial', label:'流水號', type:'serial', len:5 }
+    ]},
+    B: { label: '成品(維修品)', totalLen: 14, segments: [
+        { key:'acc', label:'會計碼', type:'fixed', value:'B', len:1 },
+        { key:'class', label:'產品分類', type:'lookup', list:'product_class_b', len:1 },
+        { key:'line', label:'產品線代碼（成品名稱）', type:'lookup', list:'product_line', len:3 },
+        { key:'spec', label:'客戶產品編號', type:'text', len:4, placeholder:'例如 1109' },
+        { key:'serial', label:'流水號', type:'serial', len:5 }
+    ]},
+    C: { label: '半成品', totalLen: 14, segments: [
+        { key:'acc', label:'會計碼', type:'fixed', value:'C', len:1 },
+        { key:'process', label:'製程碼', type:'lookup', list:'process_code', len:1 },
+        { key:'line', label:'產品線代碼', type:'lookup', list:'product_line', len:3 },
+        { key:'spec', label:'規格碼', type:'text', len:4, placeholder:'無特定規格請填 0000' },
+        { key:'serial', label:'流水號', type:'serial', len:5 }
+    ]},
+    X: { label: '半成品(虛擬階)', totalLen: 14, segments: [
+        { key:'acc', label:'會計碼', type:'fixed', value:'X', len:1 },
+        { key:'process', label:'製程碼', type:'lookup', list:'process_code', len:1, filter:(c)=>['J','M','W','F'].includes(c.code) },
+        { key:'line', label:'產品線代碼', type:'lookup', list:'product_line', len:3 },
+        { key:'spec', label:'規格碼', type:'text', len:4, placeholder:'無特定規格請填 0000' },
+        { key:'serial', label:'流水號', type:'serial', len:5 }
+    ]},
+    D: { label: '原料', totalLen: 10, segments: [
+        { key:'acc', label:'會計碼', type:'fixed', value:'D', len:1 },
+        { key:'class', label:'材質類別碼', type:'lookup', list:'raw_material_class', len:3 },
+        { key:'serial', label:'流水號', type:'serial', len:6 }
+    ]},
+    E: { label: '物料(製令/批量)', totalLen: 10, segments: [
+        { key:'acc', label:'會計碼', type:'fixed', value:'E', len:1 },
+        { key:'mode', label:'製令/批量碼', type:'select', len:1, options:[{code:'A',label:'製令'},{code:'B',label:'批量'}] },
+        { key:'class', label:'類別碼', type:'lookup', list:'component_class', len:3, filter:(c)=>c.code!=='PLA' },
+        { key:'serial', label:'流水號', type:'serial', len:5 }
+    ]},
+    F: { label: '客供料', totalLen: 14, segments: [
+        { key:'acc', label:'會計碼', type:'fixed', value:'F', len:1 },
+        { key:'class', label:'類別碼', type:'lookup', list:'component_class', len:3 },
+        { key:'customer', label:'客戶碼', type:'lookup', list:'customer_code', len:6 },
+        { key:'serial', label:'流水號', type:'serial', len:4 }
+    ]},
+    Z: { label: '耗材、費用', totalLen: 10, segments: [
+        { key:'acc', label:'會計碼', type:'fixed', value:'Z', len:1 },
+        { key:'class', label:'類別碼', type:'lookup', list:'consumable_class', len:3 },
+        { key:'serial', label:'流水號', type:'serial', len:6 }
+    ]}
+};
+const TOP_LEVEL_CATS = ['A','B']; // 成品：BOM 樹的根
+
+const LOOKUP_META = {
+    product_class_a: '產品分類（A 成品新品）',
+    product_class_b: '產品分類（B 成品維修品）',
+    product_line: '產品線代碼（A/B/C/X 共用）',
+    process_code: '製程碼（C/X 半成品）',
+    raw_material_class: '材質類別碼（D 原料）',
+    component_class: '類別碼（E 物料／F 客供料 共用）',
+    consumable_class: '類別碼（Z 耗材費用）',
+    customer_code: '客戶碼（F 客供料）'
+};
+
+// ============================================================
+// 快取
+// ============================================================
+let itemsCache = [];
+let deletedItemsCache = [];
+let lookupCache = []; // 全部 lookup_items
+let selectedCodes = new Set();
+let currentPage = 1;
+let currentLookupList = 'product_class_a';
+
+function lookupByList(list) { return lookupCache.filter(l => l.list_name === list).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0) || a.code.localeCompare(b.code)); }
+function lookupLabel(list, code) { const f = lookupCache.find(l=>l.list_name===list && l.code===code); return f ? f.label : ''; }
+
+async function loadAll() {
+    try {
+        const [items, deleted, lookups] = await Promise.all([
+            DB.select(TBL_ITEMS, { filter: 'is_deleted=eq.false', order: 'created_at.asc' }),
+            DB.select(TBL_ITEMS, { filter: 'is_deleted=eq.true', order: 'deleted_at.desc' }),
+            DB.select(TBL_LOOKUP, { order: 'list_name.asc,sort_order.asc' })
+        ]);
+        itemsCache = items; deletedItemsCache = deleted; lookupCache = lookups;
+        setSyncStatus(true);
+    } catch (e) {
+        console.error('載入失敗', e);
+        setSyncStatus(false);
+    }
+}
+
+function setSyncStatus(ok) {
+    const el = document.getElementById('syncStatus');
+    el.innerHTML = ok ? '<span class="sync-ok">&#9679; 雲端已同步</span>' : '<span class="sync-err">&#9679; 連線失敗，請確認 Supabase 資料表是否已建立（見 supabase_schema.sql）</span>';
+}
+
+function showMsg(text, type, targetId = 'itemMsg') {
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'msg ' + (type === 'error' ? 'msg-error' : type === 'info' ? 'msg-info' : 'msg-success');
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 4500);
+}
+
+// ============================================================
+// 建立新料號
+// ============================================================
+function populateCategorySelect() {
+    const sel = document.getElementById('category');
+    sel.innerHTML = '<option value="">-- 請選擇類別 --</option>' +
+        Object.keys(CATEGORY_DEFS).map(c => `<option value="${c}">${c} - ${CATEGORY_DEFS[c].label}（共${CATEGORY_DEFS[c].totalLen}碼）</option>`).join('');
+    const filterSel = document.getElementById('filterCategory');
+    filterSel.innerHTML = '<option value="">全部類別</option>' +
+        Object.keys(CATEGORY_DEFS).map(c => `<option value="${c}">${c} - ${CATEGORY_DEFS[c].label}</option>`).join('');
+}
+
+function onCategoryChange() {
+    const cat = document.getElementById('category').value;
+    const wrap = document.getElementById('dynamicSegments');
+    wrap.innerHTML = '';
+    if (!cat) { updateItemPreview(); return; }
+    const def = CATEGORY_DEFS[cat];
+    def.segments.forEach(seg => {
+        if (seg.type === 'fixed' || seg.type === 'serial') return;
+        const group = document.createElement('div');
+        group.className = 'form-group';
+        let inner = `<label>${seg.label}（${seg.len}碼）</label>`;
+        if (seg.type === 'lookup') {
+            let opts = lookupByList(seg.list);
+            if (seg.filter) opts = opts.filter(seg.filter);
+            inner += `<select id="seg_${seg.key}" onchange="updateItemPreview()">
+                <option value="">-- 請選擇 --</option>
+                ${opts.map(o => `<option value="${o.code}">${o.code} - ${o.label}</option>`).join('')}
+            </select>`;
+        } else if (seg.type === 'select') {
+            inner += `<select id="seg_${seg.key}" onchange="updateItemPreview()">
+                <option value="">-- 請選擇 --</option>
+                ${seg.options.map(o => `<option value="${o.code}">${o.code} - ${o.label}</option>`).join('')}
+            </select>`;
+        } else if (seg.type === 'text') {
+            inner += `<input type="text" id="seg_${seg.key}" maxlength="${seg.len}" placeholder="${seg.placeholder||''}" oninput="this.value=this.value.toUpperCase();updateItemPreview()">`;
+            if (seg.placeholder) inner += `<div class="hint">${seg.placeholder}</div>`;
+        }
+        group.innerHTML = inner;
+        wrap.appendChild(group);
+    });
+    updateItemPreview();
+}
+
+function getSegValue(seg) {
+    if (seg.type === 'fixed') return seg.value;
+    const el = document.getElementById('seg_' + seg.key);
+    return el ? el.value.trim().toUpperCase() : '';
+}
+
+function getNextSerial(cat, prefix, serialLen) {
+    const used = itemsCache
+        .filter(it => it.category === cat && it.code.startsWith(prefix) && it.code.length === prefix.length + serialLen)
+        .map(it => parseInt(it.code.slice(prefix.length)))
+        .filter(n => !isNaN(n))
+        .sort((a,b)=>a-b);
+    let next = 1;
+    for (const n of used) { if (n === next) next++; else break; }
+    return String(next).padStart(serialLen, '0');
+}
+
+function updateItemPreview() {
+    const cat = document.getElementById('category').value;
+    const previewEl = document.getElementById('itemPreview');
+    const breakdownEl = document.getElementById('itemBreakdown');
+    const btn = document.getElementById('addItemBtn');
+    if (!cat) { previewEl.textContent = '------'; breakdownEl.textContent = ''; btn.disabled = true; return; }
+    const def = CATEGORY_DEFS[cat];
+    const nonSerial = def.segments.filter(s => s.type !== 'serial');
+    const values = {};
+    let allFilled = true;
+    for (const seg of nonSerial) {
+        const v = getSegValue(seg);
+        values[seg.key] = v;
+        if (seg.type !== 'fixed') {
+            if (!v) allFilled = false;
+            else if (seg.type === 'text' && v.length !== seg.len) allFilled = false;
+        }
+    }
+    if (!allFilled) { previewEl.textContent = '------'; breakdownEl.textContent = ''; btn.disabled = true; hideMsg('itemMsg'); return; }
+
+    const prefix = nonSerial.map(s => values[s.key]).join('');
+    const serialSeg = def.segments.find(s => s.type === 'serial');
+    const serial = getNextSerial(cat, prefix, serialSeg.len);
+    const code = prefix + serial;
+    previewEl.textContent = code;
+    breakdownEl.textContent = nonSerial.filter(s=>s.type!=='fixed').map(s => `${s.label}=${values[s.key]}`).join('　') + `　流水號=${serial}（自動）`;
+
+    if (code.length !== def.totalLen) {
+        showMsg(`碼長異常：目前 ${code.length} 碼，應為 ${def.totalLen} 碼，請檢查各欄位輸入長度`, 'error');
+        btn.disabled = true; return;
+    }
+    const exists = itemsCache.some(it => it.code === code) || deletedItemsCache.some(it => it.code === code);
+    if (exists) {
+        showMsg(`料號 ${code} 已存在，請調整選項`, 'error');
+        btn.disabled = true;
+    } else {
+        hideMsg('itemMsg');
+        btn.disabled = false;
+    }
+}
+
+function hideMsg(id) { const el = document.getElementById(id); if (el) el.style.display = 'none'; }
+
+async function addItem() {
+    const cat = document.getElementById('category').value;
+    if (!cat) return;
+    const def = CATEGORY_DEFS[cat];
+    const nonSerial = def.segments.filter(s => s.type !== 'serial');
+    const values = {};
+    nonSerial.forEach(seg => { values[seg.key] = getSegValue(seg); });
+    const prefix = nonSerial.map(s => values[s.key]).join('');
+    const serialSeg = def.segments.find(s => s.type === 'serial');
+    const serial = getNextSerial(cat, prefix, serialSeg.len);
+    const code = prefix + serial;
+    values.serial = serial;
+
+    if (itemsCache.some(it => it.code === code)) { showMsg(`料號 ${code} 已存在`, 'error'); return; }
+
+    const desc = document.getElementById('itemDesc').value.trim();
+    document.getElementById('addItemBtn').disabled = true;
+    try {
+        const [row] = await DB.insert(TBL_ITEMS, {
+            code, category: cat, category_label: def.label, segments: values, description: desc
+        }, { onConflict: 'code', ignoreDup: true });
+        Logger.log('insert', code, { row });
+        showMsg(`料號 ${code} 新增成功！`, 'success');
+        resetItemForm();
+        await loadAll();
+        renderTable(); renderBomTree(); populateAllSelects();
+    } catch (e) {
+        showMsg('新增失敗：' + (e.message || e), 'error');
+        document.getElementById('addItemBtn').disabled = false;
+    }
+}
+
+function resetItemForm() {
+    document.getElementById('category').value = '';
+    document.getElementById('dynamicSegments').innerHTML = '';
+    document.getElementById('itemDesc').value = '';
+    document.getElementById('itemPreview').textContent = '------';
+    document.getElementById('itemBreakdown').textContent = '';
+    document.getElementById('addItemBtn').disabled = true;
+    hideMsg('itemMsg');
+}
+
+// ============================================================
+// 代碼對照表管理
+// ============================================================
+function renderLookupTabs() {
+    const wrap = document.getElementById('lookupTabs');
+    wrap.innerHTML = Object.keys(LOOKUP_META).map(list =>
+        `<button class="lookup-tab ${list===currentLookupList?'active':''}" onclick="switchLookupTab('${list}')">${LOOKUP_META[list]}</button>`
+    ).join('');
+}
+
+function switchLookupTab(list) { currentLookupList = list; renderLookupTabs(); renderLookupTable(); }
+
+function renderLookupTable() {
+    const items = lookupByList(currentLookupList);
+    const wrap = document.getElementById('lookupTableWrap');
+    if (!items.length) { wrap.innerHTML = '<div class="empty-state">此清單尚無資料，請於上方新增</div>'; return; }
+    wrap.innerHTML = `<table><thead><tr><th>代碼</th><th>名稱</th><th>備註</th><th></th></tr></thead><tbody>
+        ${items.map(it => `<tr>
+            <td class="code-cell">${it.code}</td>
+            <td>${it.label}</td>
+            <td style="color:#777;font-size:0.85rem;">${it.note || ''}</td>
+            <td><button class="delete-btn" onclick="deleteLookupItem(${it.id})">刪除</button></td>
+        </tr>`).join('')}
+    </tbody></table>`;
+}
+
+async function addLookupItem() {
+    const code = document.getElementById('lookupNewCode').value.trim().toUpperCase();
+    const label = document.getElementById('lookupNewLabel').value.trim();
+    const note = document.getElementById('lookupNewNote').value.trim();
+    if (!code || !label) { showMsg('請輸入代碼與名稱', 'error', 'lookupMsg'); return; }
+    if (lookupCache.some(l => l.list_name === currentLookupList && l.code === code)) {
+        showMsg(`代碼 ${code} 在此清單中已存在`, 'error', 'lookupMsg'); return;
+    }
+    try {
+        await DB.insert(TBL_LOOKUP, { list_name: currentLookupList, code, label, note, sort_order: lookupByList(currentLookupList).length + 1 }, { onConflict: 'list_name,code', ignoreDup: true });
+        document.getElementById('lookupNewCode').value = '';
+        document.getElementById('lookupNewLabel').value = '';
+        document.getElementById('lookupNewNote').value = '';
+        showMsg('新增成功', 'success', 'lookupMsg');
+        await loadAll();
+        renderLookupTable(); onCategoryChange();
+    } catch (e) { showMsg('新增失敗：' + (e.message || e), 'error', 'lookupMsg'); }
+}
+
+async function deleteLookupItem(id) {
+    if (!confirm('確定要刪除此代碼嗎？已建立的料號不受影響，但下拉選單將不再顯示此選項。')) return;
+    try {
+        await DB.remove(TBL_LOOKUP, 'id', id);
+        await loadAll();
+        renderLookupTable(); onCategoryChange();
+    } catch (e) { showMsg('刪除失敗：' + (e.message || e), 'error', 'lookupMsg'); }
+}
+
+// ============================================================
+// 料號清單（搜尋/分組/分頁/勾選/編輯/刪除）
+// ============================================================
+function renderStats() {
+    const wrap = document.getElementById('stats');
+    const total = itemsCache.length;
+    const byCat = {};
+    itemsCache.forEach(it => { byCat[it.category] = (byCat[it.category]||0)+1; });
+    let html = `<div class="stat-item">總料號數：<strong>${total}</strong></div>`;
+    Object.keys(CATEGORY_DEFS).forEach(c => {
+        if (byCat[c]) html += `<div class="stat-item">${c} ${CATEGORY_DEFS[c].label}：<strong>${byCat[c]}</strong></div>`;
+    });
+    wrap.innerHTML = html;
+}
+
+function getFilteredItems() {
+    const q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
+    const cat = document.getElementById('filterCategory').value;
+    return itemsCache.filter(it => {
+        if (cat && it.category !== cat) return false;
+        if (q && !(it.code.toLowerCase().includes(q) || (it.description||'').toLowerCase().includes(q))) return false;
+        return true;
+    }).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+}
+
+function renderTable() {
+    renderStats();
+    const items = getFilteredItems();
+    const groupBy = document.getElementById('groupBy').value;
+    const wrap = document.getElementById('tableWrap');
+    if (!items.length) { wrap.innerHTML = '<div class="empty-state">目前沒有符合條件的料號</div>'; return; }
+
+    if (groupBy === 'none') {
+        wrap.innerHTML = renderItemsTable(items);
+    } else {
+        const groups = {};
+        items.forEach(it => { (groups[it.category] = groups[it.category] || []).push(it); });
+        wrap.innerHTML = Object.keys(groups).sort().map(cat => `
+            <div class="group-header open" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+                <span class="group-title">${cat} - ${CATEGORY_DEFS[cat].label}</span>
+                <span class="group-count">${groups[cat].length} 筆</span>
+                <span class="arrow">&#9654;</span>
+            </div>
+            <div class="group-body open">${renderItemsTable(groups[cat])}</div>
+        `).join('');
+    }
+    bindRowCheckboxes();
+    updateBulkBar();
+}
+
+function renderItemsTable(items) {
+    return `<table><thead><tr>
+        <th><input type="checkbox" onchange="toggleAllVisible(this.checked)"></th>
+        <th>料號</th><th>類別</th><th>描述</th><th>所屬上階</th><th>狀態</th><th>建立日期</th><th></th>
+    </tr></thead><tbody>
+    ${items.map(it => `<tr data-code="${it.code}">
+        <td><input type="checkbox" class="row-checkbox" ${selectedCodes.has(it.code)?'checked':''} onchange="toggleSelect('${it.code}',this.checked)"></td>
+        <td class="code-cell">${it.code}</td>
+        <td><span class="cat-badge">${it.category}</span></td>
+        <td>${it.description || '-'}</td>
+        <td>${it.parent_code ? `<span class="code-cell" style="font-size:0.8rem;">${it.parent_code}</span>` : '-'}</td>
+        <td>${it.status}</td>
+        <td style="font-size:0.8rem;color:#888;">${it.created_at ? new Date(it.created_at).toLocaleDateString('zh-TW') : ''}</td>
+        <td class="action-btns">
+            <button class="edit-btn" onclick="editDesc('${it.code}')">編輯</button>
+            <button class="delete-btn" onclick="deleteItem('${it.code}')">刪除</button>
+        </td>
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+
+function bindRowCheckboxes() {}
+
+function toggleSelect(code, checked) { if (checked) selectedCodes.add(code); else selectedCodes.delete(code); updateBulkBar(); }
+function toggleAllVisible(checked) {
+    getFilteredItems().forEach(it => { if (checked) selectedCodes.add(it.code); else selectedCodes.delete(it.code); });
+    renderTable();
+}
+function clearSelection() { selectedCodes.clear(); renderTable(); }
+
+function updateBulkBar() {
+    const n = selectedCodes.size;
+    document.getElementById('bulkActionLabel').textContent = `已選 ${n} 筆`;
+    document.getElementById('bulkActionBar').classList.toggle('show', n > 0);
+    document.body.classList.toggle('has-bulk-bar', n > 0);
+    const expBtn = document.getElementById('exportSelectedBtn');
+    expBtn.disabled = n === 0;
+    expBtn.textContent = `匯出已勾選 Excel (${n})`;
+}
+
+async function editDesc(code) {
+    const item = itemsCache.find(i => i.code === code);
+    if (!item) return;
+    const nv = prompt(`編輯描述（${code}）：`, item.description || '');
+    if (nv === null) return;
+    try {
+        await DB.update(TBL_ITEMS, 'code', code, { description: nv.trim() });
+        Logger.log('update', code, { description: nv.trim() });
+        await loadAll(); renderTable(); renderBomTree();
+    } catch (e) { showMsg('更新失敗：' + (e.message||e), 'error', 'listMsg'); }
+}
+
+async function deleteItem(code) {
+    const children = itemsCache.filter(i => i.parent_code === code);
+    if (children.length) {
+        if (!confirm(`⚠ ${code} 底下還有 ${children.length} 個子項，刪除後子項會變成「未歸類」。仍要刪除嗎？`)) return;
+    } else if (!confirm(`確定要刪除 ${code} 嗎？（會移入回收桶）`)) return;
+    try {
+        if (children.length) await Promise.all(children.map(c => DB.update(TBL_ITEMS, 'code', c.code, { parent_code: null })));
+        await DB.update(TBL_ITEMS, 'code', code, { is_deleted: true, deleted_at: new Date().toISOString() });
+        Logger.log('delete', code, {});
+        selectedCodes.delete(code);
+        await loadAll(); renderTable(); renderBomTree();
+    } catch (e) { showMsg('刪除失敗：' + (e.message||e), 'error', 'listMsg'); }
+}
+
+async function bulkDelete() {
+    if (!selectedCodes.size) return;
+    if (!confirm(`確定要刪除已選取的 ${selectedCodes.size} 筆料號嗎？（會移入回收桶）`)) return;
+    try {
+        await Promise.all([...selectedCodes].map(code => DB.update(TBL_ITEMS, 'code', code, { is_deleted: true, deleted_at: new Date().toISOString() })));
+        selectedCodes.clear();
+        await loadAll(); renderTable(); renderBomTree();
+    } catch (e) { showMsg('批次刪除失敗：' + (e.message||e), 'error', 'listMsg'); }
+}
+
+async function refreshAll() { await loadAll(); renderTable(); renderBomTree(); renderLookupTable(); showMsg('已重新整理', 'success', 'listMsg'); }
+
+// ============================================================
+// 回收桶
+// ============================================================
+function ensureModal(title) {
+    document.getElementById('modalTitle').textContent = title;
+    document.getElementById('modalWrap').style.display = 'flex';
+    return document.getElementById('modalBody');
+}
+function closeModal() { document.getElementById('modalWrap').style.display = 'none'; }
+
+function openTrash() {
+    const body = ensureModal('🗑 回收桶');
+    if (!deletedItemsCache.length) { body.innerHTML = '<div class="empty-state">回收桶是空的</div>'; return; }
+    body.innerHTML = `<table><thead><tr><th>料號</th><th>類別</th><th>描述</th><th>刪除時間</th><th></th></tr></thead><tbody>
+    ${deletedItemsCache.map(it => `<tr>
+        <td class="code-cell">${it.code}</td><td>${it.category}</td><td>${it.description||''}</td>
+        <td style="font-size:0.8rem;color:#888;">${(it.deleted_at||'').replace('T',' ').slice(0,16)}</td>
+        <td><button class="edit-btn" onclick="restoreItem('${it.code}')">♻ 還原</button></td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function restoreItem(code) {
+    try {
+        await DB.update(TBL_ITEMS, 'code', code, { is_deleted: false, deleted_at: null });
+        Logger.log('restore', code, {});
+        await loadAll(); renderTable(); renderBomTree(); openTrash();
+    } catch (e) { alert('還原失敗：' + (e.message||e)); }
+}
+
+// ============================================================
+// 成品／半成品／物料 歸屬（BOM 樹）
+// ============================================================
+function populateAllSelects() {
+    // 供 BOM 指派用的「所有可作為上階的料號」選單資料在 renderBomTree 內即時產生
+}
+
+function buildChildrenMap() {
+    const map = {};
+    itemsCache.forEach(it => { if (it.parent_code) (map[it.parent_code] = map[it.parent_code] || []).push(it); });
+    return map;
+}
+
+function renderBomTree() {
+    const wrap = document.getElementById('bomTreeWrap');
+    const childrenMap = buildChildrenMap();
+    const roots = itemsCache.filter(it => TOP_LEVEL_CATS.includes(it.category)).sort((a,b)=>a.code.localeCompare(b.code));
+    const unassigned = itemsCache.filter(it => !TOP_LEVEL_CATS.includes(it.category) && !it.parent_code).sort((a,b)=>a.code.localeCompare(b.code));
+
+    const countDescendants = (code) => {
+        const kids = childrenMap[code] || [];
+        return kids.length + kids.reduce((s,k) => s + countDescendants(k.code), 0);
+    };
+
+    let html = '';
+    if (!roots.length) {
+        html += '<div class="empty-state">尚未建立任何成品（A/B 類別）料號</div>';
+    } else {
+        html += roots.map(r => `
+            <div class="bom-product-group">
+                <div class="bom-product-header" onclick="this.nextElementSibling.classList.toggle('open')">
+                    <div class="product-info">
+                        <span class="product-code">${r.code}</span>
+                        <span class="product-desc">${r.description || '(未填描述)'}</span>
+                    </div>
+                    <span class="product-count">${countDescendants(r.code)} 個子項</span>
+                </div>
+                <div class="bom-product-body">${renderBomChildren(r.code, childrenMap, 0)}</div>
+            </div>
+        `).join('');
+    }
+
+    html += `<div class="bom-product-group unassigned-section">
+        <div class="bom-product-header" onclick="this.nextElementSibling.classList.toggle('open')">
+            <div class="product-info"><span class="product-desc" style="font-weight:700;">🗂 尚未歸屬的半成品／原料／物料</span></div>
+            <span class="product-count">${unassigned.length} 筆</span>
+        </div>
+        <div class="bom-product-body open">
+            ${unassigned.length ? unassigned.map(it => renderUnassignedRow(it)).join('') : '<div class="empty-state">全部料號皆已歸屬</div>'}
+        </div>
+    </div>`;
+
+    wrap.innerHTML = html;
+}
+
+function parentOptionsHtml(excludeCode) {
+    const candidates = itemsCache.filter(it => it.code !== excludeCode);
+    return '<option value="">-- 選擇上階料號 --</option>' + candidates.map(c => `<option value="${c.code}">${c.code} — ${c.description||''}</option>`).join('');
+}
+
+function renderBomChildren(parentCode, childrenMap, depth) {
+    const kids = (childrenMap[parentCode] || []).sort((a,b)=>a.code.localeCompare(b.code));
+    if (!kids.length) return '';
+    return kids.map(k => `
+        <div class="bom-node" style="padding-left:${depth*18}px;">
+            <span class="cat-badge">${k.category}</span>
+            <span class="bom-code">${k.code}</span>
+            <span class="bom-desc">${k.description || ''}</span>
+            <span class="bom-meta">${k.quantity != null ? `數量 ${k.quantity}${k.unit||''}` : ''}</span>
+            <span class="bom-actions">
+                <input type="number" class="qty-input" placeholder="數量" value="${k.quantity ?? ''}" onchange="updateBomQty('${k.code}',this.value,null)">
+                <input type="text" class="unit-input" placeholder="單位" value="${k.unit || ''}" onchange="updateBomQty('${k.code}',null,this.value)">
+                <button class="assign-btn" onclick="removeFromParent('${k.code}')">移出</button>
+            </span>
+        </div>
+        ${renderBomChildren(k.code, childrenMap, depth+1)}
+    `).join('');
+}
+
+function renderUnassignedRow(it) {
+    return `<div class="bom-node">
+        <span class="cat-badge">${it.category}</span>
+        <span class="bom-code">${it.code}</span>
+        <span class="bom-desc">${it.description || ''}</span>
+        <span class="bom-actions">
+            <select class="assign-parent-select" id="parentSel_${it.code}">${parentOptionsHtml(it.code)}</select>
+            <button class="assign-btn" onclick="assignParent('${it.code}')">指派歸屬</button>
+        </span>
+    </div>`;
+}
+
+async function assignParent(code) {
+    const sel = document.getElementById('parentSel_' + code);
+    const parentCode = sel ? sel.value : '';
+    if (!parentCode) { showMsg('請先選擇上階料號', 'error', 'bomMsg'); return; }
+    try {
+        await DB.update(TBL_ITEMS, 'code', code, { parent_code: parentCode });
+        Logger.log('assign_parent', code, { parent_code: parentCode });
+        showMsg(`已將 ${code} 歸屬至 ${parentCode}`, 'success', 'bomMsg');
+        await loadAll(); renderBomTree(); renderTable();
+    } catch (e) { showMsg('指派失敗：' + (e.message||e), 'error', 'bomMsg'); }
+}
+
+async function removeFromParent(code) {
+    if (!confirm(`確定要將 ${code} 移出目前的歸屬嗎？`)) return;
+    try {
+        await DB.update(TBL_ITEMS, 'code', code, { parent_code: null });
+        Logger.log('unassign_parent', code, {});
+        await loadAll(); renderBomTree(); renderTable();
+    } catch (e) { showMsg('操作失敗：' + (e.message||e), 'error', 'bomMsg'); }
+}
+
+let qtyDebounce = {};
+function updateBomQty(code, qty, unit) {
+    clearTimeout(qtyDebounce[code]);
+    qtyDebounce[code] = setTimeout(async () => {
+        const fields = {};
+        if (qty !== null) fields.quantity = qty === '' ? null : Number(qty);
+        if (unit !== null) fields.unit = unit || null;
+        try {
+            await DB.update(TBL_ITEMS, 'code', code, fields);
+            Logger.log('update_qty', code, fields);
+            await loadAll();
+        } catch (e) { showMsg('更新失敗：' + (e.message||e), 'error', 'bomMsg'); }
+    }, 500);
+}
+
+// ============================================================
+// 匯入（貼上 / Excel）
+// ============================================================
+function switchImportTab(tab, btn) {
+    document.getElementById('importPasteTab').style.display = tab === 'paste' ? '' : 'none';
+    document.getElementById('importFileTab').style.display = tab === 'file' ? '' : 'none';
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+}
+
+function parseImportedCode(str) {
+    if (!str) return null;
+    str = String(str).trim().toUpperCase();
+    const first = str[0];
+    const def = CATEGORY_DEFS[first];
+    if (!def) return null;
+    if (str.length !== def.totalLen) return null;
+    return { code: str, category: first, category_label: def.label };
+}
+
+let bulkParsed = [];
+function previewBulk() {
+    const raw = document.getElementById('bulkInput').value.trim();
+    if (!raw) { showMsg('請先貼上料號資料', 'error', 'bulkMsg'); return; }
+    const lines = raw.split('\n').filter(l => l.trim());
+    bulkParsed = [];
+    lines.forEach(line => {
+        const parts = line.split(/[,\t]+/).map(s => s.trim());
+        let parsed = null, codeIdx = -1;
+        for (let j = 0; j < parts.length; j++) { parsed = parseImportedCode(parts[j]); if (parsed) { codeIdx = j; break; } }
+        const desc = parts.filter((p, idx) => idx !== codeIdx && p).join(', ');
+        if (parsed) {
+            const dup = itemsCache.find(c => c.code === parsed.code) || bulkParsed.find(p => p.status==='valid' && p.code === parsed.code);
+            if (dup) bulkParsed.push({ ...parsed, desc, status:'duplicate' });
+            else bulkParsed.push({ ...parsed, desc, status:'valid' });
+        } else {
+            bulkParsed.push({ code: parts[0] || line, desc, status:'invalid', reason:'找不到符合任一類別長度的料號格式' });
+        }
+    });
+    renderBulkPreview();
+}
+function renderBulkPreview() {
+    const valid = bulkParsed.filter(p=>p.status==='valid').length;
+    const dup = bulkParsed.filter(p=>p.status==='duplicate').length;
+    const invalid = bulkParsed.filter(p=>p.status==='invalid').length;
+    let html = `<p style="font-size:0.85rem;margin-bottom:10px;"><span class="valid">可匯入 ${valid} 筆</span>`;
+    if (dup) html += `、<span class="duplicate">已存在(略過) ${dup} 筆</span>`;
+    if (invalid) html += `、<span class="invalid">無法辨識 ${invalid} 筆</span>`;
+    html += `</p><table><thead><tr><th>狀態</th><th>料號</th><th>類別</th><th>描述</th></tr></thead><tbody>`;
+    bulkParsed.forEach(p => {
+        const cls = p.status==='invalid'?'invalid':p.status==='duplicate'?'duplicate':'valid';
+        const statusText = p.status==='valid'?'可匯入':p.status==='duplicate'?'已存在':'無法辨識';
+        html += `<tr><td class="${cls}">${statusText}</td><td class="code-cell">${p.code}</td><td>${p.category?p.category+' '+CATEGORY_DEFS[p.category].label:(p.reason||'-')}</td><td>${p.desc||'-'}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('bulkPreview').innerHTML = html;
+    document.getElementById('bulkAddBtn').style.display = valid > 0 ? '' : 'none';
+}
+async function confirmBulk() {
+    const toAdd = bulkParsed.filter(p => p.status === 'valid');
+    try {
+        await DB.insert(TBL_ITEMS, toAdd.map(p => ({ code:p.code, category:p.category, category_label:p.category_label, segments:{}, description:p.desc||'' })), { onConflict:'code', ignoreDup:true });
+        showMsg(`成功匯入 ${toAdd.length} 筆`, 'success', 'bulkMsg');
+        clearBulk();
+        await loadAll(); renderTable(); renderBomTree();
+    } catch (e) { showMsg('匯入失敗：' + (e.message||e), 'error', 'bulkMsg'); }
+}
+function clearBulk() { document.getElementById('bulkInput').value=''; bulkParsed=[]; document.getElementById('bulkPreview').innerHTML=''; document.getElementById('bulkAddBtn').style.display='none'; }
+
+let fileParsed = [];
+function handleFileDrop(e) { const f = e.dataTransfer.files[0]; if (f) processFile(f); }
+function handleFileSelect(e) { const f = e.target.files[0]; if (f) processFile(f); }
+function processFile(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const wb = XLSX.read(data, { type: 'array' });
+            let allRows = [];
+            wb.SheetNames.forEach(name => {
+                XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '' }).forEach(row => allRows.push(row));
+            });
+            fileParsed = [];
+            allRows.forEach(row => {
+                const cells = row.map(c => String(c).trim());
+                let parsed = null, codeIdx = -1;
+                for (let j = 0; j < cells.length; j++) { parsed = parseImportedCode(cells[j]); if (parsed) { codeIdx = j; break; } }
+                if (!parsed) return;
+                const desc = cells.filter((c, idx) => idx !== codeIdx && c).join(', ');
+                const dup = itemsCache.find(c => c.code === parsed.code) || fileParsed.find(p => p.code === parsed.code);
+                fileParsed.push({ ...parsed, desc, status: dup ? 'duplicate' : 'valid' });
+            });
+            renderFilePreview();
+        } catch (err) {
+            showMsg('檔案解析失敗：' + err.message, 'error', 'fileMsg');
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+function renderFilePreview() {
+    if (!fileParsed.length) { showMsg('未在檔案中找到符合料號格式的欄位', 'error', 'fileMsg'); document.getElementById('filePreview').innerHTML=''; return; }
+    const valid = fileParsed.filter(p=>p.status==='valid').length;
+    const dup = fileParsed.filter(p=>p.status==='duplicate').length;
+    showMsg(`解析完成：可匯入 ${valid} 筆，已存在略過 ${dup} 筆`, 'success', 'fileMsg');
+    let html = `<table><thead><tr><th>狀態</th><th>料號</th><th>類別</th><th>描述</th></tr></thead><tbody>`;
+    fileParsed.forEach(p => {
+        html += `<tr><td class="${p.status==='valid'?'valid':'duplicate'}">${p.status==='valid'?'可匯入':'已存在'}</td><td class="code-cell">${p.code}</td><td>${p.category} ${CATEGORY_DEFS[p.category].label}</td><td>${p.desc||'-'}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('filePreview').innerHTML = html;
+    document.getElementById('fileAddBtn').style.display = valid > 0 ? '' : 'none';
+}
+async function confirmFileBulk() {
+    const toAdd = fileParsed.filter(p => p.status === 'valid');
+    try {
+        await DB.insert(TBL_ITEMS, toAdd.map(p => ({ code:p.code, category:p.category, category_label:p.category_label, segments:{}, description:p.desc||'' })), { onConflict:'code', ignoreDup:true });
+        showMsg(`成功匯入 ${toAdd.length} 筆`, 'success', 'fileMsg');
+        clearFileImport();
+        await loadAll(); renderTable(); renderBomTree();
+    } catch (e) { showMsg('匯入失敗：' + (e.message||e), 'error', 'fileMsg'); }
+}
+function clearFileImport() { fileParsed=[]; document.getElementById('filePreview').innerHTML=''; document.getElementById('fileAddBtn').style.display='none'; document.getElementById('xlsxFile').value=''; }
+
+// ============================================================
+// Excel 匯出（真正 .xlsx，非 CSV）
+// ============================================================
+function itemsToRows(items) {
+    return items.map(it => ({
+        '料號': it.code,
+        '類別': it.category,
+        '類別名稱': it.category_label,
+        '描述': it.description || '',
+        '所屬上階料號': it.parent_code || '',
+        '使用數量': it.quantity ?? '',
+        '單位': it.unit || '',
+        '狀態': it.status,
+        '建立日期': it.created_at ? new Date(it.created_at).toLocaleDateString('zh-TW') : ''
+    }));
+}
+function writeSheet(wb, name, rows, widths) {
+    const ws = XLSX.utils.json_to_sheet(rows);
+    if (widths) ws['!cols'] = widths;
+    XLSX.utils.book_append_sheet(wb, ws, name);
+}
+
+function exportAllXLSX() {
+    if (!itemsCache.length) { showMsg('沒有資料可匯出', 'error', 'listMsg'); return; }
+    const wb = XLSX.utils.book_new();
+    writeSheet(wb, '料號總表', itemsToRows(itemsCache), [{wch:16},{wch:6},{wch:18},{wch:30},{wch:16},{wch:10},{wch:8},{wch:8},{wch:12}]);
+    XLSX.writeFile(wb, `料號清單_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+function exportSelectedXLSX() {
+    if (!selectedCodes.size) return;
+    const items = itemsCache.filter(it => selectedCodes.has(it.code));
+    const wb = XLSX.utils.book_new();
+    writeSheet(wb, '已選料號', itemsToRows(items), [{wch:16},{wch:6},{wch:18},{wch:30},{wch:16},{wch:10},{wch:8},{wch:8},{wch:12}]);
+    XLSX.writeFile(wb, `料號清單_已選${selectedCodes.size}筆_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+function exportBomXLSX() {
+    if (!itemsCache.length) { showMsg('沒有資料可匯出', 'error', 'listMsg'); return; }
+    const childrenMap = buildChildrenMap();
+    const roots = itemsCache.filter(it => TOP_LEVEL_CATS.includes(it.category)).sort((a,b)=>a.code.localeCompare(b.code));
+    const rows = [];
+    const walk = (item, level) => {
+        rows.push({
+            '層級': level,
+            '料號': item.code,
+            '類別': item.category,
+            '縮排描述': '　'.repeat(level) + (level>0?'└ ':'') + (item.description||''),
+            '所屬上階料號': item.parent_code || '',
+            '使用數量': item.quantity ?? '',
+            '單位': item.unit || '',
+            '狀態': item.status
+        });
+        (childrenMap[item.code]||[]).sort((a,b)=>a.code.localeCompare(b.code)).forEach(c => walk(c, level+1));
+    };
+    roots.forEach(r => walk(r, 0));
+    const unassigned = itemsCache.filter(it => !TOP_LEVEL_CATS.includes(it.category) && !it.parent_code);
+    unassigned.forEach(it => rows.push({ '層級':'未歸屬','料號':it.code,'類別':it.category,'縮排描述':it.description||'','所屬上階料號':'','使用數量':it.quantity??'','單位':it.unit||'','狀態':it.status }));
+
+    const wb = XLSX.utils.book_new();
+    writeSheet(wb, 'BOM歸屬結構', rows, [{wch:8},{wch:16},{wch:6},{wch:36},{wch:16},{wch:10},{wch:8},{wch:8}]);
+    writeSheet(wb, '料號總表', itemsToRows(itemsCache), [{wch:16},{wch:6},{wch:18},{wch:30},{wch:16},{wch:10},{wch:8},{wch:8},{wch:12}]);
+    XLSX.writeFile(wb, `BOM歸屬結構_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ============================================================
+// 初始化
+// ============================================================
+async function init() {
+    populateCategorySelect();
+    await loadAll();
+    renderLookupTabs();
+    renderLookupTable();
+    renderTable();
+    renderBomTree();
+    document.getElementById('loadingOverlay').style.display = 'none';
+}
+init();
+</script>
+</body>
+</html>
