@@ -124,6 +124,8 @@ body.has-bulk-bar { padding-bottom: 64px; }
 .bom-product-header .product-code { font-family: Consolas, monospace; font-weight: 700; color: #1a73e8; font-size: 1rem; letter-spacing: 1px; }
 .bom-product-header .product-desc { color: #444; font-size: 0.9rem; }
 .bom-product-header .product-count { font-size: 0.8rem; color: #666; background: #fff; padding: 3px 10px; border-radius: 12px; }
+.bom-product-header .arrow { font-size: 0.8rem; color: #888; transition: transform 0.2s; }
+.bom-product-header.open .arrow { transform: rotate(90deg); }
 .bom-product-body { display: none; padding: 10px 18px 16px; }
 .bom-product-body.open { display: block; }
 .bom-node { display:flex; align-items:center; gap:8px; padding:6px 0; flex-wrap:wrap; border-bottom:1px dashed #eee; }
@@ -417,6 +419,7 @@ let itemsCache = [];
 let deletedItemsCache = [];
 let lookupCache = []; // 全部 lookup_items
 let bomLinksCache = []; // 全部 bom_links（多對多歸屬關係）
+let expandedBomGroups = new Map(); // BOM 樹各區塊展開/收合狀態，key 不存在=預設展開
 let selectedCodes = new Set();
 let currentPage = 1;
 let currentLookupList = 'product_class_a';
@@ -871,6 +874,12 @@ function buildChildrenMap() {
     return map;
 }
 
+function toggleBomGroup(key) {
+    const currentlyOpen = expandedBomGroups.get(key) !== false;
+    expandedBomGroups.set(key, !currentlyOpen);
+    renderBomTree();
+}
+
 function renderBomTree() {
     const wrap = document.getElementById('bomTreeWrap');
     const childrenMap = buildChildrenMap();
@@ -888,30 +897,36 @@ function renderBomTree() {
         return n;
     };
 
+    // 區塊預設展開；是否展開記在 expandedBomGroups（key 沒出現 = 預設展開），
+    // 這樣「加入」「移出」「改數量」等動作觸發重繪時，畫面不會把已展開的區塊突然收合掉
+    const isOpen = (key) => expandedBomGroups.get(key) !== false;
+
     let html = '';
     if (!roots.length) {
         html += '<div class="empty-state">尚未建立任何成品（A/B 類別）料號</div>';
     } else {
         html += roots.map(r => `
             <div class="bom-product-group">
-                <div class="bom-product-header" onclick="this.nextElementSibling.classList.toggle('open')">
+                <div class="bom-product-header ${isOpen(r.code)?'open':''}" onclick="toggleBomGroup('${r.code}')">
                     <div class="product-info">
                         <span class="product-code">${r.code}</span>
                         <span class="product-desc">${r.description || '(未填描述)'}</span>
                     </div>
                     <span class="product-count">${countDescendants(r.code, new Set([r.code]))} 個子項</span>
+                    <span class="arrow">&#9654;</span>
                 </div>
-                <div class="bom-product-body">${renderBomChildren(r.code, childrenMap, 0)}</div>
+                <div class="bom-product-body ${isOpen(r.code)?'open':''}">${renderBomChildren(r.code, childrenMap, 0)}</div>
             </div>
         `).join('');
     }
 
     html += `<div class="bom-product-group unassigned-section">
-        <div class="bom-product-header" onclick="this.nextElementSibling.classList.toggle('open')">
+        <div class="bom-product-header ${isOpen('__unassigned__')?'open':''}" onclick="toggleBomGroup('__unassigned__')">
             <div class="product-info"><span class="product-desc" style="font-weight:700;">🗂 尚未歸屬的半成品／原料／物料</span></div>
             <span class="product-count">${unassigned.length} 筆</span>
+            <span class="arrow">&#9654;</span>
         </div>
-        <div class="bom-product-body open">
+        <div class="bom-product-body ${isOpen('__unassigned__')?'open':''}">
             ${unassigned.length ? unassigned.map(it => renderAssignRow(it)).join('') : '<div class="empty-state">全部料號都至少歸屬一個成品了</div>'}
         </div>
     </div>`;
