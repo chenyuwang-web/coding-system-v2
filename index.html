@@ -117,6 +117,11 @@ body.has-bulk-bar { padding-bottom: 64px; }
 .lookup-add-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
 .lookup-add-row input { padding: 8px 12px; border: 1.5px solid #ddd; border-radius: 6px; font-size: 0.88rem; }
 
+.quick-add-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; }
+.quick-add-bar select { padding: 8px 10px; border: 1.5px solid #ddd; border-radius: 6px; font-size: 0.85rem; min-width: 220px; max-width: 320px; }
+.quick-add-bar .qa-arrow { font-size: 0.82rem; color: #888; white-space: nowrap; }
+.quick-add-bar .qty-input, .quick-add-bar .unit-input { padding: 8px 10px; }
+
 .bom-product-group { border: 1px solid #d2e3fc; border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
 .bom-product-header { background: linear-gradient(135deg, #e8f0fe, #d2e3fc); padding: 14px 18px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; flex-wrap:wrap; gap:8px; }
 .bom-product-header:hover { background: linear-gradient(135deg, #d2e3fc, #bbdefb); }
@@ -244,7 +249,15 @@ body.has-bulk-bar { padding-bottom: 64px; }
     <!-- 成品/半成品/物料 歸屬 -->
     <div class="card">
         <h2>成品／半成品／物料歸屬（BOM 結構）</h2>
-        <p class="card-sub">將半成品、原料、物料、客供料、耗材指派到所屬的上一階料號，建立完整 BOM 樹</p>
+        <p class="card-sub">將半成品、原料、物料、客供料、耗材指派到所屬的上一階料號，建立完整 BOM 樹。共用件可以重複加入多個成品。</p>
+        <div class="quick-add-bar">
+            <select id="qaChild"><option value="">-- 選擇要加入的料號 --</option></select>
+            <span class="qa-arrow">加入到 →</span>
+            <select id="qaParent"><option value="">-- 選擇上階成品／半成品 --</option></select>
+            <input type="number" id="qaQty" placeholder="數量" class="qty-input">
+            <input type="text" id="qaUnit" placeholder="單位" class="unit-input">
+            <button class="btn btn-primary btn-sm" onclick="quickAddBom()">＋ 加入 BOM</button>
+        </div>
         <div id="bomMsg" class="msg"></div>
         <div id="bomTreeWrap"></div>
     </div>
@@ -588,7 +601,7 @@ async function addItem() {
         showMsg(`料號 ${code} 新增成功！`, 'success');
         resetItemForm();
         await loadAll();
-        renderTable(); renderBomTree(); populateAllSelects();
+        renderTable(); renderBomTree();
     } catch (e) {
         showMsg('新增失敗：' + (e.message || e), 'error');
         document.getElementById('addItemBtn').disabled = false;
@@ -881,6 +894,7 @@ function toggleBomGroup(key) {
 }
 
 function renderBomTree() {
+    populateQuickAdd();
     const wrap = document.getElementById('bomTreeWrap');
     const childrenMap = buildChildrenMap();
     const roots = itemsCache.filter(it => TOP_LEVEL_CATS.includes(it.category)).sort((a,b)=>a.code.localeCompare(b.code));
@@ -934,11 +948,6 @@ function renderBomTree() {
     wrap.innerHTML = html;
 }
 
-function parentOptionsHtml(excludeCode, alreadyParentCodes) {
-    const candidates = itemsCache.filter(it => it.code !== excludeCode && !alreadyParentCodes.includes(it.code));
-    return '<option value="">-- 選擇上階料號 --</option>' + candidates.map(c => `<option value="${c.code}">${c.code} — ${c.description||''}</option>`).join('');
-}
-
 function renderBomChildren(parentCode, childrenMap, depth) {
     const kids = (childrenMap[parentCode] || []).slice().sort((a,b)=>a.item.code.localeCompare(b.item.code));
     if (!kids.length) return '';
@@ -956,13 +965,6 @@ function renderBomChildren(parentCode, childrenMap, depth) {
                 <button class="assign-btn" onclick="removeLink(${link.id})">移出</button>
             </span>
         </div>
-        <div class="bom-node" style="padding-left:${depth*18+18}px;background:#fafcff;">
-            <span class="bom-meta">➕ 這個料號也用在其他成品／半成品的 BOM：</span>
-            <span class="bom-actions">
-                <select class="assign-parent-select" id="parentSel_${k.code}_${parentCode}">${parentOptionsHtml(k.code, parentCodesOf(k.code))}</select>
-                <button class="assign-btn" onclick="assignParent('${k.code}','${parentCode}')">加入</button>
-            </span>
-        </div>
         ${renderBomChildren(k.code, childrenMap, depth+1)}
     `;}).join('');
 }
@@ -973,23 +975,48 @@ function renderAssignRow(it) {
         <span class="bom-code">${it.code}</span>
         <span class="bom-desc">${it.description || ''}</span>
         <span class="bom-actions">
-            <select class="assign-parent-select" id="parentSel_${it.code}">${parentOptionsHtml(it.code, [])}</select>
-            <button class="assign-btn" onclick="assignParent('${it.code}')">指派歸屬</button>
+            <button class="assign-btn" onclick="quickFillChild('${it.code}')">↑ 用上面的快速加入指派</button>
         </span>
     </div>`;
 }
 
-async function assignParent(code, fromSelectSuffix) {
-    const selId = fromSelectSuffix ? `parentSel_${code}_${fromSelectSuffix}` : `parentSel_${code}`;
-    const sel = document.getElementById(selId);
-    const parentCode = sel ? sel.value : '';
-    if (!parentCode) { showMsg('請先選擇上階料號', 'error', 'bomMsg'); return; }
+// 快速加入工具：選料號 + 選要加到哪個成品，一次搞定，不用在樹狀圖裡逐項找按鈕
+function populateQuickAdd() {
+    const childSel = document.getElementById('qaChild');
+    const parentSel = document.getElementById('qaParent');
+    if (!childSel || !parentSel) return;
+    const keepChild = childSel.value, keepParent = parentSel.value;
+    const opts = itemsCache.slice().sort((a,b)=>a.code.localeCompare(b.code))
+        .map(c => `<option value="${c.code}">${c.code} — ${c.category} ${c.description||''}</option>`).join('');
+    childSel.innerHTML = '<option value="">-- 選擇要加入的料號 --</option>' + opts;
+    parentSel.innerHTML = '<option value="">-- 選擇上階成品／半成品 --</option>' + opts;
+    childSel.value = keepChild; parentSel.value = keepParent;
+}
+
+function quickFillChild(code) {
+    populateQuickAdd();
+    const childSel = document.getElementById('qaChild');
+    if (childSel) childSel.value = code;
+    document.querySelector('.quick-add-bar').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const parentSel = document.getElementById('qaParent');
+    if (parentSel) parentSel.focus();
+}
+
+async function quickAddBom() {
+    const child = document.getElementById('qaChild').value;
+    const parent = document.getElementById('qaParent').value;
+    const qty = document.getElementById('qaQty').value;
+    const unit = document.getElementById('qaUnit').value;
+    if (!child || !parent) { showMsg('請選擇料號跟要加入的上階成品', 'error', 'bomMsg'); return; }
+    if (child === parent) { showMsg('料號不能加入自己的 BOM', 'error', 'bomMsg'); return; }
     try {
-        await DB.insert(TBL_BOM, { parent_code: parentCode, child_code: code }, { onConflict: 'parent_code,child_code', ignoreDup: true });
-        Logger.log('assign_parent', code, { parent_code: parentCode });
-        showMsg(`已將 ${code} 加入 ${parentCode} 的 BOM`, 'success', 'bomMsg');
+        await DB.insert(TBL_BOM, { parent_code: parent, child_code: child, quantity: qty === '' ? null : Number(qty), unit: unit || null }, { onConflict: 'parent_code,child_code', ignoreDup: true });
+        Logger.log('assign_parent', child, { parent_code: parent });
+        showMsg(`已將 ${child} 加入 ${parent} 的 BOM`, 'success', 'bomMsg');
+        document.getElementById('qaQty').value = '';
+        document.getElementById('qaUnit').value = '';
         await loadAll(); renderBomTree(); renderTable();
-    } catch (e) { showMsg('指派失敗：' + (e.message||e), 'error', 'bomMsg'); }
+    } catch (e) { showMsg('加入失敗：' + (e.message||e), 'error', 'bomMsg'); }
 }
 
 async function removeLink(linkId) {
