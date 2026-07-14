@@ -171,7 +171,8 @@ body.has-bulk-bar { padding-bottom: 64px; }
             </div>
             <div class="form-group">
                 <label>描述（選填）</label>
-                <input type="text" id="itemDesc" placeholder="例如：9吋光罩盒本體">
+                <input type="text" id="itemDesc" placeholder="例如：9吋光罩盒本體" oninput="checkDescDuplicate()">
+                <div id="descDupWarn" style="display:none;margin-top:6px;padding:8px 12px;background:#fff8e1;border:1px solid #ffe082;border-radius:7px;font-size:0.82rem;color:#7b5800;line-height:1.6;"></div>
             </div>
         </div>
         <div id="dynamicSegments" class="form-grid" style="margin-top:18px;"></div>
@@ -595,6 +596,45 @@ function resetItemForm() {
     document.getElementById('itemBreakdown').textContent = '';
     document.getElementById('addItemBtn').disabled = true;
     hideMsg('itemMsg');
+    const dw = document.getElementById('descDupWarn');
+    if (dw) dw.style.display = 'none';
+}
+
+// 描述即時查重：輸入描述時比對已建立的料號，避免同樣品項重複建立
+function checkDescDuplicate() {
+    const desc = (document.getElementById('itemDesc').value || '').trim();
+    const warnEl = document.getElementById('descDupWarn');
+    if (!warnEl) return;
+
+    if (desc.length < 3) { warnEl.style.display = 'none'; return; }
+
+    const descLow = desc.toLowerCase();
+    const matches = itemsCache.filter(it => {
+        if (!it.description) return false;
+        const d = it.description.toLowerCase();
+        return d === descLow || d.includes(descLow) || (descLow.length >= 5 && descLow.includes(d));
+    });
+
+    if (!matches.length) { warnEl.style.display = 'none'; return; }
+
+    const exactMatch = matches.find(it => (it.description || '').trim().toLowerCase() === descLow);
+    const items = matches.slice(0, 5).map(it =>
+        `<span style="font-family:Consolas,monospace;font-weight:700;color:#1a73e8;">${it.code}</span>　${it.category} ${CATEGORY_DEFS[it.category] ? CATEGORY_DEFS[it.category].label : ''}　${it.description || ''}`
+    ).join('<br>');
+    const more = matches.length > 5 ? `<br>…共 ${matches.length} 筆相符` : '';
+
+    if (exactMatch) {
+        warnEl.style.background = '#ffebee';
+        warnEl.style.borderColor = '#ef9a9a';
+        warnEl.style.color = '#b71c1c';
+        warnEl.innerHTML = `⚠ 描述完全相符，已有以下料號，請確認是否重複建置：<br>${items}${more}`;
+    } else {
+        warnEl.style.background = '#fff8e1';
+        warnEl.style.borderColor = '#ffe082';
+        warnEl.style.color = '#7b5800';
+        warnEl.innerHTML = `🔍 找到 ${matches.length} 筆相似品項，請確認是否已建置過：<br>${items}${more}`;
+    }
+    warnEl.style.display = 'block';
 }
 
 // ============================================================
