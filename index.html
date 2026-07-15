@@ -377,7 +377,7 @@ const CATEGORY_DEFS = {
     ]},
     C: { label: '半成品', totalLen: 14, segments: [
         { key:'acc', label:'會計碼', type:'fixed', value:'C', len:1 },
-        { key:'process', label:'製程碼', type:'lookup', list:'process_code', len:1 },
+        { key:'process', label:'製程碼', type:'lookup', list:'process_code', len:1, filter:(c)=>c.code!=='W' },
         { key:'line', label:'產品線代碼', type:'lookup', list:'product_line', len:3 },
         { key:'spec', label:'規格碼', type:'text', len:4, placeholder:'無特定規格請填 0000' },
         { key:'serial', label:'流水號', type:'serial', len:5 }
@@ -389,16 +389,16 @@ const CATEGORY_DEFS = {
         { key:'spec', label:'規格碼', type:'text', len:4, placeholder:'無特定規格請填 0000' },
         { key:'serial', label:'流水號', type:'serial', len:5 }
     ]},
-    D: { label: '原料', totalLen: 10, segments: [
+    D: { label: '原料', totalLen: 14, segments: [
         { key:'acc', label:'會計碼', type:'fixed', value:'D', len:1 },
         { key:'class', label:'材質類別碼', type:'lookup', list:'raw_material_class', len:3 },
-        { key:'serial', label:'流水號', type:'serial', len:6 }
+        { key:'serial', label:'流水號', type:'serial', len:10 }
     ]},
-    E: { label: '物料(製令/批量)', totalLen: 10, segments: [
+    E: { label: '物料(製令/批量)', totalLen: 14, segments: [
         { key:'acc', label:'會計碼', type:'fixed', value:'E', len:1 },
         { key:'mode', label:'製令/批量碼', type:'select', len:1, options:[{code:'A',label:'製令'},{code:'B',label:'批量'}] },
         { key:'class', label:'類別碼', type:'lookup', list:'component_class', len:3, filter:(c)=>c.code!=='PLA' },
-        { key:'serial', label:'流水號', type:'serial', len:5 }
+        { key:'serial', label:'流水號', type:'serial', len:9 }
     ]},
     F: { label: '客供料', totalLen: 14, segments: [
         { key:'acc', label:'會計碼', type:'fixed', value:'F', len:1 },
@@ -406,10 +406,10 @@ const CATEGORY_DEFS = {
         { key:'customer', label:'客戶碼', type:'lookup', list:'customer_code', len:6 },
         { key:'serial', label:'流水號', type:'serial', len:4 }
     ]},
-    Z: { label: '耗材、費用', totalLen: 10, segments: [
+    Z: { label: '耗材、費用', totalLen: 14, segments: [
         { key:'acc', label:'會計碼', type:'fixed', value:'Z', len:1 },
         { key:'class', label:'類別碼', type:'lookup', list:'consumable_class', len:3 },
-        { key:'serial', label:'流水號', type:'serial', len:6 }
+        { key:'serial', label:'流水號', type:'serial', len:10 }
     ]}
 };
 const TOP_LEVEL_CATS = ['A','B']; // 成品：BOM 樹的根

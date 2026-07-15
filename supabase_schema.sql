@@ -102,17 +102,16 @@ insert into lookup_items (list_name, code, label, note, sort_order) values
 ('raw_material_class', 'PEK', 'PEEK', '', 7),
 ('raw_material_class', 'PCZ', 'PC（補Z）', '', 8),
 ('raw_material_class', 'PPZ', 'PP（補Z）', '', 9),
--- 物料/客供料 類別碼（E 第3~5碼、F 第2~4碼 共用；PLA 僅 F 客供料使用）
+-- 物料/客供料 類別碼（E 第3~5碼、F 第2~4碼 共用；PLA 僅 F 客供料使用；20260715 版拿掉 TRM）
 ('component_class', 'PLA', '塑膠類', '僅適用於 F 客供料', 0),
-('component_class', 'MTL', '金屬件', '', 1),
-('component_class', 'ELE', '電控類', '', 2),
-('component_class', 'TRM', '端子類', '', 3),
+('component_class', 'MTL', '金屬料件', '', 1),
+('component_class', 'ELE', '電控料件', '', 2),
 ('component_class', 'CHM', '化學品', '', 4),
 ('component_class', 'PKG', '包材', '', 5),
 ('component_class', 'YCT', '接頭類', '', 6),
-('component_class', 'RBR', '橡膠/墊片', '', 7),
+('component_class', 'RBR', '橡膠', '', 7),
 ('component_class', 'PLP', '外購塑膠件', '', 8),
-('component_class', 'OTH', '其他耗材', '', 9),
+('component_class', 'OTH', '其他件', '', 9),
 -- 耗材/費用 類別碼（Z 第2~4碼）
 ('consumable_class', 'CHM', '化學藥劑類', '', 1),
 ('consumable_class', 'OIL', '油品/潤滑類', '', 2),
