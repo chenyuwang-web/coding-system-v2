@@ -793,12 +793,13 @@ function clearSelection() { selectedCodes.clear(); renderTable(); }
 
 function updateBulkBar() {
     const n = selectedCodes.size;
-    document.getElementById('bulkActionLabel').textContent = `已選 ${n} 筆`;
+    const total = n ? expandWithDescendants(selectedCodes).size : 0;
+    document.getElementById('bulkActionLabel').textContent = total > n ? `已選 ${n} 筆（含子件共 ${total} 筆）` : `已選 ${n} 筆`;
     document.getElementById('bulkActionBar').classList.toggle('show', n > 0);
     document.body.classList.toggle('has-bulk-bar', n > 0);
     const expBtn = document.getElementById('exportSelectedBtn');
     expBtn.disabled = n === 0;
-    expBtn.textContent = `匯出已勾選 Excel (${n})`;
+    expBtn.textContent = total > n ? `匯出已勾選 Excel (含子件共${total})` : `匯出已勾選 Excel (${n})`;
 }
 
 async function editDesc(code) {
@@ -1192,12 +1193,30 @@ function exportAllXLSX() {
     writeSheet(wb, '料號總表', itemsToRows(itemsCache), [{wch:16},{wch:6},{wch:18},{wch:30},{wch:20},{wch:8},{wch:12}]);
     XLSX.writeFile(wb, `料號清單_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
+
+// 勾選成品／半成品時，自動把 BOM 底下所有子件（含孫階）一起帶入，不用逐一勾選
+function expandWithDescendants(codes) {
+    const childrenMap = buildChildrenMap();
+    const result = new Set(codes);
+    const stack = [...codes];
+    while (stack.length) {
+        const code = stack.pop();
+        (childrenMap[code] || []).forEach(({ item }) => {
+            if (!result.has(item.code)) { result.add(item.code); stack.push(item.code); }
+        });
+    }
+    return result;
+}
+
 function exportSelectedXLSX() {
     if (!selectedCodes.size) return;
-    const items = itemsCache.filter(it => selectedCodes.has(it.code));
+    const expanded = expandWithDescendants(selectedCodes);
+    const items = itemsCache.filter(it => expanded.has(it.code));
     const wb = XLSX.utils.book_new();
     writeSheet(wb, '已選料號', itemsToRows(items), [{wch:16},{wch:6},{wch:18},{wch:30},{wch:20},{wch:8},{wch:12}]);
-    XLSX.writeFile(wb, `料號清單_已選${selectedCodes.size}筆_${new Date().toISOString().slice(0,10)}.xlsx`);
+    XLSX.writeFile(wb, `料號清單_已選${selectedCodes.size}筆(含子件共${items.length}筆)_${new Date().toISOString().slice(0,10)}.xlsx`);
+    const extra = items.length - selectedCodes.size;
+    showMsg(extra > 0 ? `已匯出，系統自動帶入 ${extra} 筆子件，共 ${items.length} 筆` : `已匯出 ${items.length} 筆`, 'success', 'listMsg');
 }
 function exportBomXLSX() {
     if (!itemsCache.length) { showMsg('沒有資料可匯出', 'error', 'listMsg'); return; }
