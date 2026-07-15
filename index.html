@@ -775,7 +775,7 @@ function renderItemsTable(items) {
         <td>${it.status}</td>
         <td style="font-size:0.8rem;color:#888;">${it.created_at ? new Date(it.created_at).toLocaleDateString('zh-TW') : ''}</td>
         <td class="action-btns">
-            <button class="edit-btn" onclick="editDesc('${it.code}')">編輯</button>
+            <button class="edit-btn" onclick="openEditModal('${it.code}')">編輯</button>
             <button class="delete-btn" onclick="deleteItem('${it.code}')">刪除</button>
         </td>
     </tr>`).join('')}
@@ -802,16 +802,62 @@ function updateBulkBar() {
     expBtn.textContent = total > n ? `匯出已勾選 Excel (含子件共${total})` : `匯出已勾選 Excel (${n})`;
 }
 
-async function editDesc(code) {
+function openEditModal(code) {
     const item = itemsCache.find(i => i.code === code);
     if (!item) return;
-    const nv = prompt(`編輯描述（${code}）：`, item.description || '');
-    if (nv === null) return;
+    const body = ensureModal('編輯料號');
+    const descEsc = (item.description || '').replace(/"/g, '&quot;');
+    body.innerHTML = `
+        <div class="form-grid">
+            <div class="form-group">
+                <label>料號編碼</label>
+                <input type="text" id="editCode" value="${item.code}" style="font-family:Consolas,monospace;font-weight:700;">
+                <div class="hint">改編碼後，這個料號在 BOM 裡的歸屬關係會自動跟著更新，不會斷掉</div>
+            </div>
+            <div class="form-group">
+                <label>描述</label>
+                <input type="text" id="editDescInput" value="${descEsc}">
+            </div>
+            <div class="form-group">
+                <label>狀態</label>
+                <select id="editStatus">
+                    ${['啟用','草稿','停用','淘汰'].map(s => `<option value="${s}" ${s===item.status?'selected':''}>${s}</option>`).join('')}
+                </select>
+            </div>
+        </div>
+        <div id="editModalMsg" class="msg"></div>
+        <div class="btn-row" style="justify-content:flex-start;">
+            <button class="btn btn-primary" onclick="saveItemEdit('${code}')">儲存</button>
+            <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+        </div>
+    `;
+}
+
+async function saveItemEdit(origCode) {
+    const newCode = document.getElementById('editCode').value.trim().toUpperCase();
+    const newDesc = document.getElementById('editDescInput').value.trim();
+    const newStatus = document.getElementById('editStatus').value;
+    if (!newCode) { showMsg('料號不能空白', 'error', 'editModalMsg'); return; }
+    if (newCode !== origCode) {
+        const def = CATEGORY_DEFS[newCode[0]];
+        if (!def || newCode.length !== def.totalLen) {
+            showMsg(`新料號格式不正確：${newCode[0]} 類別的編碼應為 ${def ? def.totalLen : '?'} 碼`, 'error', 'editModalMsg');
+            return;
+        }
+        if (itemsCache.some(i => i.code === newCode) || deletedItemsCache.some(i => i.code === newCode)) {
+            showMsg(`料號 ${newCode} 已經存在`, 'error', 'editModalMsg');
+            return;
+        }
+    }
     try {
-        await DB.update(TBL_ITEMS, 'code', code, { description: nv.trim() });
-        Logger.log('update', code, { description: nv.trim() });
+        const fields = { description: newDesc, status: newStatus };
+        if (newCode !== origCode) fields.code = newCode;
+        await DB.update(TBL_ITEMS, 'code', origCode, fields);
+        Logger.log('update', origCode, fields);
+        closeModal();
+        showMsg(newCode !== origCode ? `已將 ${origCode} 改成 ${newCode}` : '已更新', 'success', 'listMsg');
         await loadAll(); renderTable(); renderBomTree();
-    } catch (e) { showMsg('更新失敗：' + (e.message||e), 'error', 'listMsg'); }
+    } catch (e) { showMsg('更新失敗：' + (e.message||e), 'error', 'editModalMsg'); }
 }
 
 async function deleteItem(code) {
