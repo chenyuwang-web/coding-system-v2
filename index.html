@@ -900,11 +900,18 @@ function closeModal() { document.getElementById('modalWrap').style.display = 'no
 function openTrash() {
     const body = ensureModal('🗑 回收桶');
     if (!deletedItemsCache.length) { body.innerHTML = '<div class="empty-state">回收桶是空的</div>'; return; }
-    body.innerHTML = `<table><thead><tr><th>料號</th><th>類別</th><th>描述</th><th>刪除時間</th><th></th></tr></thead><tbody>
+    body.innerHTML = `
+    <div class="btn-row" style="justify-content:flex-start;margin-bottom:14px;">
+        <button class="btn btn-secondary" style="background:#ffebee;color:#c62828;" onclick="emptyTrash()">🗑 清空回收桶（${deletedItemsCache.length} 筆，永久刪除）</button>
+    </div>
+    <table><thead><tr><th>料號</th><th>類別</th><th>描述</th><th>刪除時間</th><th></th></tr></thead><tbody>
     ${deletedItemsCache.map(it => `<tr>
         <td class="code-cell">${it.code}</td><td>${it.category}</td><td>${it.description||''}</td>
         <td style="font-size:0.8rem;color:#888;">${(it.deleted_at||'').replace('T',' ').slice(0,16)}</td>
-        <td><button class="edit-btn" onclick="restoreItem('${it.code}')">♻ 還原</button></td>
+        <td class="action-btns">
+            <button class="edit-btn" onclick="restoreItem('${it.code}')">♻ 還原</button>
+            <button class="delete-btn" onclick="permanentDeleteItem('${it.code}')">永久刪除</button>
+        </td>
     </tr>`).join('')}</tbody></table>`;
 }
 
@@ -914,6 +921,26 @@ async function restoreItem(code) {
         Logger.log('restore', code, {});
         await loadAll(); renderTable(); renderBomTree(); openTrash();
     } catch (e) { alert('還原失敗：' + (e.message||e)); }
+}
+
+async function permanentDeleteItem(code) {
+    if (!confirm(`確定要永久刪除 ${code} 嗎？此動作無法復原（BOM 歸屬關係也會一併消失）。`)) return;
+    try {
+        await DB.remove(TBL_ITEMS, 'code', code); // 硬刪除；bom_links 靠外鍵 on delete cascade 自動一併清除
+        Logger.log('hard_delete', code, {});
+        await loadAll(); openTrash();
+    } catch (e) { alert('永久刪除失敗：' + (e.message||e)); }
+}
+
+async function emptyTrash() {
+    const n = deletedItemsCache.length;
+    if (!n) return;
+    if (!confirm(`確定要清空回收桶嗎？將永久刪除 ${n} 筆料號，此動作無法復原（BOM 歸屬關係也會一併消失）。`)) return;
+    try {
+        await Promise.all(deletedItemsCache.map(it => DB.remove(TBL_ITEMS, 'code', it.code)));
+        Logger.log('empty_trash', null, { count: n });
+        await loadAll(); renderTable(); renderBomTree(); openTrash();
+    } catch (e) { alert('清空失敗：' + (e.message||e)); }
 }
 
 // ============================================================
