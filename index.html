@@ -523,7 +523,8 @@ function getSegValue(seg) {
 }
 
 function getNextSerial(cat, prefix, serialLen) {
-    const used = itemsCache
+    // 生效中跟回收桶裡的料號都要算進去，避免自動流水號撞到已刪除但還沒被清空回收桶的號碼
+    const used = [...itemsCache, ...deletedItemsCache]
         .filter(it => it.category === cat && it.code.startsWith(prefix) && it.code.length === prefix.length + serialLen)
         .map(it => parseInt(it.code.slice(prefix.length)))
         .filter(n => !isNaN(n))
@@ -564,9 +565,10 @@ function updateItemPreview() {
         showMsg(`碼長異常：目前 ${code.length} 碼，應為 ${def.totalLen} 碼，請檢查各欄位輸入長度`, 'error');
         btn.disabled = true; return;
     }
-    const exists = itemsCache.some(it => it.code === code) || deletedItemsCache.some(it => it.code === code);
+    const inTrash = deletedItemsCache.some(it => it.code === code);
+    const exists = itemsCache.some(it => it.code === code) || inTrash;
     if (exists) {
-        showMsg(`料號 ${code} 已存在，請調整選項`, 'error');
+        showMsg(inTrash ? `料號 ${code} 在回收桶裡（曾經建立過又被刪除），請到回收桶還原，或調整選項改用其他號碼` : `料號 ${code} 已存在，請調整選項`, 'error');
         btn.disabled = true;
     } else {
         hideMsg('itemMsg');
