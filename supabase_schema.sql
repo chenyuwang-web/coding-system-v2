@@ -1,8 +1,7 @@
 -- ============================================================
--- 料號編碼系統 v2 — Supabase 資料表建置腳本
--- 請到 Supabase 專案 → SQL Editor，貼上整段執行一次即可
--- （沿用現有 product-code-system 專案 URL/Key，但使用全新的資料表，
--- 　不會動到既有的 product_codes 資料表）
+-- 料號編碼系統 v2 — Supabase 資料表建置腳本（整合版，含 BOM 關聯表）
+-- 請到 Supabase 專案 → SQL Editor，貼上整段執行一次即可建好全部資料表
+-- 內容依「編碼原則規範書 Rev.1.1（20260723）」+ 後續系統內調整
 -- ============================================================
 
 -- 1. 料號主表
@@ -12,9 +11,9 @@ create table if not exists coding_items (
     category_label text,
     segments jsonb not null default '{}',    -- 拆解後的各段代碼，方便日後查詢/重組
     description text,
-    parent_code text references coding_items(code) on delete set null,
-    quantity numeric,
-    unit text,
+    parent_code text references coding_items(code) on delete set null,  -- 已不使用，改用 bom_links，保留欄位相容
+    quantity numeric,   -- 已不使用，改用 bom_links.quantity，保留欄位相容
+    unit text,          -- 已不使用，改用 bom_links.unit，保留欄位相容
     status text not null default '啟用',      -- 啟用/草稿/停用/淘汰
     locked boolean not null default false,
     lock_reason text,
@@ -24,7 +23,6 @@ create table if not exists coding_items (
 );
 
 create index if not exists idx_coding_items_category on coding_items(category);
-create index if not exists idx_coding_items_parent on coding_items(parent_code);
 create index if not exists idx_coding_items_deleted on coding_items(is_deleted);
 
 -- 2. 代碼對照表（產品分類、產品線、材質類別、客戶碼…全部共用一張表，用 list_name 區分）
@@ -49,13 +47,27 @@ create table if not exists operation_logs (
     created_at timestamptz not null default now()
 );
 
+-- 4. BOM 歸屬關聯表（多對多：同一料號可同時歸屬多個成品／半成品的 BOM）
+create table if not exists bom_links (
+    id bigint generated always as identity primary key,
+    parent_code text not null references coding_items(code) on update cascade on delete cascade,
+    child_code text not null references coding_items(code) on update cascade on delete cascade,
+    quantity numeric,
+    unit text,
+    created_at timestamptz not null default now(),
+    unique (parent_code, child_code)
+);
+
+create index if not exists idx_bom_links_parent on bom_links(parent_code);
+create index if not exists idx_bom_links_child on bom_links(child_code);
+
 -- ============================================================
--- RLS：與現有 product_codes 相同做法，開放 anon 金鑰可直接讀寫
--- （前端用 publishable key 操作，安全性等同現有系統）
+-- RLS：開放 anon 金鑰可直接讀寫（前端用 publishable key 操作）
 -- ============================================================
 alter table coding_items enable row level security;
 alter table lookup_items enable row level security;
 alter table operation_logs enable row level security;
+alter table bom_links enable row level security;
 
 drop policy if exists "coding_items_all" on coding_items;
 create policy "coding_items_all" on coding_items for all using (true) with check (true);
@@ -66,8 +78,11 @@ create policy "lookup_items_all" on lookup_items for all using (true) with check
 drop policy if exists "operation_logs_all" on operation_logs;
 create policy "operation_logs_all" on operation_logs for all using (true) with check (true);
 
+drop policy if exists "bom_links_all" on bom_links;
+create policy "bom_links_all" on bom_links for all using (true) with check (true);
+
 -- ============================================================
--- 4. 預帶入代碼對照表（依編碼原則規範書 Rev.1.1 / 20260723）
+-- 5. 預帶入代碼對照表（依編碼原則規範書 Rev.1.1 / 20260723，含後續系統內異動）
 -- ============================================================
 insert into lookup_items (list_name, code, label, note, sort_order) values
 -- 產品分類（A 成品新品／C 半成品／X 虛擬階 共用，第2碼）
@@ -76,32 +91,33 @@ insert into lookup_items (list_name, code, label, note, sort_order) values
 ('product_class_a', 'E', '設備', '機型型號類，如 AOI 檢測設備', 3),
 -- 產品分類（B 成品維修品 第2碼）
 ('product_class_b', 'W', '清洗封裝', '僅用於客供清洗件', 1),
--- 產品線代碼（A/B/C/X 共用，第3~5碼／成品名稱）
+-- 產品線代碼（A/B/C/X 共用，第3~5碼／成品名稱；依英文字母排序）
 ('product_line', 'AOI', 'Automatic Optical Inspection', '自動光學檢測設備', 1),
 ('product_line', 'ASM', '機構組裝類', '機構組裝子系統', 2),
 ('product_line', 'ATM', 'Auto Transfer Machine', '自動搬運機', 3),
 ('product_line', 'CAB', '線材/線纜類', '線材線纜子系統', 4),
 ('product_line', 'CHE', '化學耗材類', '化學耗材子系統', 5),
 ('product_line', 'ELE', '電子電控類', '電子電控子系統', 6),
-('product_line', 'FAS', '標準鎖附五金類', '標準五金子系統', 7),
-('product_line', 'FOS', 'Front Opening Shipping box', '晶圓傳送盒(FOSB)，晶圓尺寸8吋=0008/12吋=0012', 8),
-('product_line', 'FOU', 'Front Opening Unified pod', '晶圓載具(FOUP)，晶圓尺寸8吋=0008/12吋=0012', 9),
-('product_line', 'FRC', 'Frame Cassette', '晶圓框架載具，晶圓尺寸8吋=0008/12吋=0012', 10),
-('product_line', 'MAS', 'MASk box', '光罩盒/大尺寸光罩盒，依型號定義規格碼', 11),
-('product_line', 'MEC', '金屬材料/加工件類', '機構加工子系統', 12),
-('product_line', 'MWS', 'Micro Warehouse System', '微型倉儲', 13),
-('product_line', 'OHB', 'N2充氣裝置', '', 14),
-('product_line', 'OPT', '光學元件類', '光學元件子系統', 15),
-('product_line', 'PAC', '包裝/紙材類', '包裝材料子系統', 16),
-('product_line', 'PDB', 'Power Distribution Board', '配電盤', 17),
-('product_line', 'PFP', 'PFA Pipe', 'PFA管材，依外徑換算(mm/25=inch)', 18),
-('product_line', 'PFV', 'PFA Valve', 'PFA閥件，規格碼=0304', 19),
-('product_line', 'PLA', '塑膠類', '塑膠材料子系統', 20),
-('product_line', 'PNE', '氣動氣路類', '氣動氣路子系統', 21),
-('product_line', 'RSP', 'Reticle SMIF Pod', '自動化光罩載具，六吋=06A01/八吋=08A01', 22),
-('product_line', 'RUB', '橡膠/矽膠類', '橡膠矽膠子系統', 23),
-('product_line', 'SCD', 'Specialty Chemical Drum', '特用化學桶，裝填容量(L)如200L=0200', 24),
-('product_line', 'TRA', '傳動元件類', '傳動元件子系統', 25),
+('product_line', 'EUV', 'Extreme UltraViolet', 'EUV光罩盒，六吋EUV光罩盒=06A01', 7),
+('product_line', 'FAS', '標準鎖附五金類', '標準五金子系統', 8),
+('product_line', 'FOS', 'Front Opening Shipping box', '晶圓傳送盒(FOSB)，晶圓尺寸8吋=0008/12吋=0012', 9),
+('product_line', 'FOU', 'Front Opening Unified pod', '晶圓載具(FOUP)，晶圓尺寸8吋=0008/12吋=0012', 10),
+('product_line', 'FRC', 'Frame Cassette', '晶圓框架載具，晶圓尺寸8吋=0008/12吋=0012', 11),
+('product_line', 'MAS', 'MASk box', '光罩盒/大尺寸光罩盒，依型號定義規格碼', 12),
+('product_line', 'MEC', '金屬材料/加工件類', '金屬加工件，規格碼5碼：1st=1板金/2CNC，2nd=0陽極/1無陽極，3rd=0熱處理/1無熱處理，4th=0噴砂/1無噴砂，5th=0拉絲/1無拉絲', 13),
+('product_line', 'MWS', 'Micro Warehouse System', '微型倉儲', 14),
+('product_line', 'OHB', 'OHB-N2配電盤', '', 15),
+('product_line', 'OPT', '光學元件類', '光學元件子系統', 16),
+('product_line', 'PAC', '包裝/紙材類', '包裝材料子系統', 17),
+('product_line', 'PDB', 'Power Distribution Board', '配電盤', 18),
+('product_line', 'PFP', 'PFA Pipe', 'PFA管材，依外徑換算(mm/25=inch)', 19),
+('product_line', 'PFV', 'PFA Valve', 'PFA閥件，規格碼=0304', 20),
+('product_line', 'PLA', '塑膠類', '塑膠材料子系統', 21),
+('product_line', 'PNE', '氣動氣路類', '氣動氣路子系統', 22),
+('product_line', 'RSP', 'Reticle SMIF Pod', '自動化光罩載具，六吋=06A01/八吋=08A01', 23),
+('product_line', 'RUB', '橡膠/矽膠類', '橡膠矽膠子系統', 24),
+('product_line', 'SCD', 'Specialty Chemical Drum', '特用化學桶，裝填容量(L)如200L=0200', 25),
+('product_line', 'TRA', '傳動元件類', '傳動元件子系統', 26),
 -- 原料類別碼（D 原料 第2~4碼，材質未達3碼以Z補足）
 ('raw_material_class', 'PFA', 'PFA', '全氟烷氧基聚合物', 1),
 ('raw_material_class', 'PPS', 'PPS', '聚苯硫醚', 2),
