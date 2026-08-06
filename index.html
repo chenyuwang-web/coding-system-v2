@@ -303,21 +303,26 @@ body.has-bulk-bar { padding-bottom: 64px; }
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script>
 // ============================================================
-// Supabase 設定（沿用同一 Supabase 專案，新資料表 coding_items / lookup_items / operation_logs）
+// 資料庫連線設定
+// 兩種後端都是 PostgREST 相容 API，差別只在網址／金鑰／路徑前綴：
+//   - Supabase 雲端：REST_BASE 需要 '/rest/v1' 前綴，且要帶 apikey/Authorization header
+//   - 自架 PostgREST（例如公司 NAS）：REST_BASE 不需要前綴（設空字串），也不需要 API_KEY
 // ============================================================
-const SUPABASE_URL = 'https://xrfvclmzmzmxpwbzkouiby.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_fKlhbQJRQR8IowwaPWhf3w_5V3ETjs9';
+const SUPABASE_URL = 'https://aspoqsbwqdxqqkxzglal.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_1XP-LYJ5HngskTu36zPZ7A_uwF2IhY0';
+const REST_PATH_PREFIX = '/rest/v1';   // 自架 PostgREST 請改成空字串 ''
 const TBL_ITEMS = 'coding_items';
 const TBL_LOOKUP = 'lookup_items';
 const TBL_LOGS = 'operation_logs';
 const TBL_BOM = 'bom_links';
 
-const _H = () => ({ 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` });
+const _H = () => SUPABASE_KEY ? { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } : {};
 const _HJ = () => ({ ..._H(), 'Content-Type': 'application/json' });
+const _base = (table) => `${SUPABASE_URL}${REST_PATH_PREFIX}/${table}`;
 
 const DB = {
     async select(table, opts = {}) {
-        let url = `${SUPABASE_URL}/rest/v1/${table}?select=*`;
+        let url = `${_base(table)}?select=*`;
         if (opts.filter) url += `&${opts.filter}`;
         url += opts.order ? `&order=${opts.order}` : '';
         const res = await fetch(url, { headers: _H() });
@@ -328,7 +333,7 @@ const DB = {
         const body = Array.isArray(rows) ? rows : [rows];
         if (!body.length) return [];
         const conflict = opts.onConflict ? `?on_conflict=${opts.onConflict}` : '';
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}${conflict}`, {
+        const res = await fetch(`${_base(table)}${conflict}`, {
             method: 'POST',
             headers: { ..._HJ(), 'Prefer': (opts.ignoreDup ? 'resolution=ignore-duplicates,' : '') + 'return=representation' },
             body: JSON.stringify(body)
@@ -337,14 +342,14 @@ const DB = {
         return res.json();
     },
     async update(table, matchCol, matchVal, fields) {
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${matchCol}=eq.${encodeURIComponent(matchVal)}`, {
+        const res = await fetch(`${_base(table)}?${matchCol}=eq.${encodeURIComponent(matchVal)}`, {
             method: 'PATCH', headers: { ..._HJ(), 'Prefer': 'return=representation' }, body: JSON.stringify(fields)
         });
         if (!res.ok) throw new Error(await res.text());
         return res.json();
     },
     async remove(table, matchCol, matchVal) {
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${matchCol}=eq.${encodeURIComponent(matchVal)}`, {
+        const res = await fetch(`${_base(table)}?${matchCol}=eq.${encodeURIComponent(matchVal)}`, {
             method: 'DELETE', headers: _H()
         });
         if (!res.ok) throw new Error(await res.text());
@@ -353,7 +358,7 @@ const DB = {
 
 const Logger = {
     log(action, code, detail) {
-        try { fetch(`${SUPABASE_URL}/rest/v1/${TBL_LOGS}`, { method: 'POST', headers: { ..._HJ(), 'Prefer': 'return=minimal' }, body: JSON.stringify({ action, code: code || null, detail: detail || {} }) }).catch(() => {}); } catch {}
+        try { fetch(_base(TBL_LOGS), { method: 'POST', headers: { ..._HJ(), 'Prefer': 'return=minimal' }, body: JSON.stringify({ action, code: code || null, detail: detail || {} }) }).catch(() => {}); } catch {}
     }
 };
 

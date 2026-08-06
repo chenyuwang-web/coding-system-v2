@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: "CHANGE_ME_DB_PASSWORD"
+      POSTGRES_DB: codingdb
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+
+  postgrest:
+    image: postgrest/postgrest:latest
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - "3000:3000"
+    environment:
+      PGRST_DB_URI: "postgres://authenticator:CHANGE_ME_AUTH_PASSWORD@db:5432/codingdb"
+      PGRST_DB_SCHEMA: "public"
+      PGRST_DB_ANON_ROLE: "web_anon"
+      PGRST_DB_USE_LEGACY_GUCS: "false"
