@@ -1,13 +1,13 @@
 -- ============================================================
 -- 料號編碼系統 v2 — Supabase 資料表建置腳本（整合版，含 BOM 關聯表）
 -- 請到 Supabase 專案 → SQL Editor，貼上整段執行一次即可建好全部資料表
--- 內容依「編碼原則規範書 Rev.1.1（20260723）」+ 後續系統內調整
+-- 內容依「編碼原則規範書 Rev.1.3（20260907）」+ 後續系統內調整
 -- ============================================================
 
 -- 1. 料號主表
 create table if not exists coding_items (
     code text primary key,
-    category text not null,                 -- A/B/C/D/E/F/G/X/Z
+    category text not null,                 -- A/B/C/D/E/F/G/X/Z/M/K/S
     category_label text,
     segments jsonb not null default '{}',    -- 拆解後的各段代碼，方便日後查詢/重組
     description text,
@@ -29,7 +29,7 @@ create index if not exists idx_coding_items_deleted on coding_items(is_deleted);
 create table if not exists lookup_items (
     id bigint generated always as identity primary key,
     list_name text not null,     -- 例如 product_class_a / product_class_b / product_line /
-                                  -- raw_material_class / material_class_num / customer_code
+                                  -- raw_material_class / material_class_num / customer_code / tool_customer_code
     code text not null,
     label text not null,
     note text,
@@ -82,7 +82,7 @@ drop policy if exists "bom_links_all" on bom_links;
 create policy "bom_links_all" on bom_links for all using (true) with check (true);
 
 -- ============================================================
--- 5. 預帶入代碼對照表（依編碼原則規範書 Rev.1.1 / 20260723，含後續系統內異動）
+-- 5. 預帶入代碼對照表（依編碼原則規範書 Rev.1.3 / 20260907，含後續系統內異動）
 -- ============================================================
 insert into lookup_items (list_name, code, label, note, sort_order) values
 -- 產品分類（A 成品新品／C 半成品／X 虛擬階 共用，第2碼）
@@ -149,5 +149,9 @@ insert into lookup_items (list_name, code, label, note, sort_order) values
 ('material_class_num', '99', '其他', 'OTHers - 未分類雜項', 10),
 -- 客戶碼（F 客供料，固定6碼；聖凰/宜特/圓達尚未取得正式代碼，待業務提供後再補）
 ('customer_code', 'A00001', '家登', '', 1),
-('customer_code', 'A00002', '碩頂', '', 2)
+('customer_code', 'A00002', '碩頂', '', 2),
+-- 客戶別代碼（M 模具／K 治具／S 檢具 共用，第2~3碼；依規範書第十二章對照表，後續新增客戶依序編號）
+('tool_customer_code', '01', '圓達', '', 1),
+('tool_customer_code', '02', '家登', '', 2),
+('tool_customer_code', '03', '碩頂', '', 3)
 on conflict (list_name, code) do nothing;

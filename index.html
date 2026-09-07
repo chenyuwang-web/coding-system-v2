@@ -159,7 +159,7 @@ body.has-bulk-bar { padding-bottom: 64px; }
 
 <div class="header">
     <h1>料號編碼系統 v2</h1>
-    <p>依「編碼原則規範書 Rev.1.1」建立：9 大類別（A/B 成品、C/X 半成品、D 原料、E 物料、F 客供料、G 商品、Z 耗材費用）</p>
+    <p>依「編碼原則規範書 Rev.1.3」建立：12 大類別（A/B 成品、C/X 半成品、D 原料、E 物料、F 客供料、G 商品、Z 耗材費用、M/K/S 模具治具檢具）</p>
     <div class="sync-status" id="syncStatus"></div>
 </div>
 
@@ -249,7 +249,7 @@ body.has-bulk-bar { padding-bottom: 64px; }
     <!-- 成品/半成品/物料 歸屬 -->
     <div class="card">
         <h2>成品／半成品／物料歸屬（BOM 結構）</h2>
-        <p class="card-sub">將半成品、原料、物料、客供料、耗材指派到所屬的上一階料號，建立完整 BOM 樹。共用件可以重複加入多個成品。</p>
+        <p class="card-sub">將半成品、原料、物料、客供料、耗材指派到所屬的上一階料號，建立完整 BOM 樹。共用件可以重複加入多個成品。（模具／治具／檢具屬生產輔助工具非銷售庫存品號，不納入 BOM）</p>
         <div class="quick-add-bar">
             <select id="qaChild"><option value="">-- 選擇要加入的料號 --</option></select>
             <span class="qa-arrow">加入到 →</span>
@@ -419,9 +419,28 @@ const CATEGORY_DEFS = {
         { key:'acc', label:'會計碼', type:'fixed', value:'Z', len:1 },
         { key:'class', label:'類別碼', type:'lookup', list:'material_class_num', len:2 },
         { key:'serial', label:'流水號', type:'serial', len:5 }
+    ]},
+    M: { label: '模具', totalLen: 8, segments: [
+        { key:'acc', label:'識別碼', type:'fixed', value:'M', len:1 },
+        { key:'customer', label:'客戶別', type:'lookup', list:'tool_customer_code', len:2 },
+        { key:'year', label:'年份', type:'digits', len:2, placeholder:'西元年末2碼，例如2026→26' },
+        { key:'serial', label:'流水號', type:'serial', len:3 }
+    ]},
+    K: { label: '治具', totalLen: 8, segments: [
+        { key:'acc', label:'識別碼', type:'fixed', value:'K', len:1 },
+        { key:'customer', label:'客戶別', type:'lookup', list:'tool_customer_code', len:2 },
+        { key:'year', label:'年份', type:'digits', len:2, placeholder:'西元年末2碼，例如2026→26' },
+        { key:'serial', label:'流水號', type:'serial', len:3 }
+    ]},
+    S: { label: '檢具', totalLen: 8, segments: [
+        { key:'acc', label:'識別碼', type:'fixed', value:'S', len:1 },
+        { key:'customer', label:'客戶別', type:'lookup', list:'tool_customer_code', len:2 },
+        { key:'year', label:'年份', type:'digits', len:2, placeholder:'西元年末2碼，例如2026→26' },
+        { key:'serial', label:'流水號', type:'serial', len:3 }
     ]}
 };
 const TOP_LEVEL_CATS = ['A','B']; // 成品：BOM 樹的根
+const NON_BOM_CATS = ['M','K','S']; // 模具／治具／檢具：非銷售或庫存管理品項，不納入 BOM 結構
 
 const LOOKUP_META = {
     product_class_a: '產品分類（A 成品新品／C 半成品／X 虛擬階）',
@@ -429,7 +448,8 @@ const LOOKUP_META = {
     product_line: '產品線代碼（A/B/C/X 共用）',
     raw_material_class: '材質類別碼（D 原料）',
     material_class_num: '類別碼（E 物料／F 客供料／Z 耗材費用 共用，2碼數字）',
-    customer_code: '客戶碼（F 客供料）'
+    customer_code: '客戶碼（F 客供料）',
+    tool_customer_code: '客戶別代碼（M 模具／K 治具／S 檢具 共用）'
 };
 
 // ============================================================
@@ -516,6 +536,9 @@ function onCategoryChange() {
         } else if (seg.type === 'text') {
             inner += `<input type="text" id="seg_${seg.key}" maxlength="${seg.len}" placeholder="${seg.placeholder||''}" oninput="this.value=this.value.toUpperCase();updateItemPreview()">`;
             if (seg.placeholder) inner += `<div class="hint">${seg.placeholder}</div>`;
+        } else if (seg.type === 'digits') {
+            inner += `<input type="text" id="seg_${seg.key}" maxlength="${seg.len}" placeholder="${seg.placeholder||''}" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,${seg.len});updateItemPreview()">`;
+            if (seg.placeholder) inner += `<div class="hint">${seg.placeholder}</div>`;
         }
         group.innerHTML = inner;
         wrap.appendChild(group);
@@ -556,7 +579,7 @@ function updateItemPreview() {
         values[seg.key] = v;
         if (seg.type !== 'fixed') {
             if (!v) allFilled = false;
-            else if (seg.type === 'text' && v.length !== seg.len) allFilled = false;
+            else if ((seg.type === 'text' || seg.type === 'digits') && v.length !== seg.len) allFilled = false;
         }
     }
     if (!allFilled) { previewEl.textContent = '------'; breakdownEl.textContent = ''; btn.disabled = true; hideMsg('itemMsg'); return; }
@@ -981,7 +1004,7 @@ function renderBomTree() {
     const wrap = document.getElementById('bomTreeWrap');
     const childrenMap = buildChildrenMap();
     const roots = itemsCache.filter(it => TOP_LEVEL_CATS.includes(it.category)).sort((a,b)=>a.code.localeCompare(b.code));
-    const unassigned = itemsCache.filter(it => !TOP_LEVEL_CATS.includes(it.category) && parentCodesOf(it.code).length === 0).sort((a,b)=>a.code.localeCompare(b.code));
+    const unassigned = itemsCache.filter(it => !TOP_LEVEL_CATS.includes(it.category) && !NON_BOM_CATS.includes(it.category) && parentCodesOf(it.code).length === 0).sort((a,b)=>a.code.localeCompare(b.code));
 
     const countDescendants = (code, seen) => {
         const kids = childrenMap[code] || [];
@@ -1069,7 +1092,7 @@ function populateQuickAdd() {
     const parentSel = document.getElementById('qaParent');
     if (!childSel || !parentSel) return;
     const keepChild = childSel.value, keepParent = parentSel.value;
-    const opts = itemsCache.slice().sort((a,b)=>a.code.localeCompare(b.code))
+    const opts = itemsCache.filter(c => !NON_BOM_CATS.includes(c.category)).slice().sort((a,b)=>a.code.localeCompare(b.code))
         .map(c => `<option value="${c.code}">${c.code} — ${c.category} ${c.description||''}</option>`).join('');
     childSel.innerHTML = '<option value="">-- 選擇要加入的料號 --</option>' + opts;
     parentSel.innerHTML = '<option value="">-- 選擇上階成品／半成品 --</option>' + opts;
@@ -1321,7 +1344,7 @@ function exportBomXLSX() {
         (childrenMap[item.code]||[]).slice().sort((a,b)=>a.item.code.localeCompare(b.item.code)).forEach(c => walk(c.item, level+1, item.code, c.link, seen));
     };
     roots.forEach(r => walk(r, 0, null, null, new Set([r.code])));
-    const unassigned = itemsCache.filter(it => !TOP_LEVEL_CATS.includes(it.category) && parentCodesOf(it.code).length === 0);
+    const unassigned = itemsCache.filter(it => !TOP_LEVEL_CATS.includes(it.category) && !NON_BOM_CATS.includes(it.category) && parentCodesOf(it.code).length === 0);
     unassigned.forEach(it => rows.push({ '層級':'未歸屬','料號':it.code,'類別':it.category,'縮排描述':it.description||'','所屬上階料號':'','使用數量':'','單位':'','狀態':it.status }));
 
     const wb = XLSX.utils.book_new();
