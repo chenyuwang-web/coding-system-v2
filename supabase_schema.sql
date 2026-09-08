@@ -97,6 +97,7 @@ insert into lookup_items (list_name, code, label, note, sort_order) values
 ('product_line', 'ATM', 'Auto Transfer Machine', '自動搬運機', 3),
 ('product_line', 'CAB', '線材/線纜類', '線材線纜子系統', 4),
 ('product_line', 'CHE', '化學耗材類', '化學耗材子系統', 5),
+('product_line', 'DFT', 'DF-Tube', 'DF-Tube 圓管，小圓內徑10mm=0010／小圓內徑15mm=0015／實心橢圓管內徑6mm=0006', 27),
 ('product_line', 'ELE', '電子電控類', '電子電控子系統', 6),
 ('product_line', 'EUV', 'Extreme UltraViolet', 'EUV光罩盒，六吋EUV光罩盒=06A01', 7),
 ('product_line', 'FAS', '標準鎖附五金類', '標準五金子系統', 8),
