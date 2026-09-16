@@ -107,7 +107,7 @@ insert into lookup_items (list_name, code, label, note, sort_order) values
 ('product_line', 'MAS', 'MASk box', '光罩盒/大尺寸光罩盒，依型號定義規格碼', 12),
 ('product_line', 'MEC', '金屬材料/加工件類', '金屬加工件，規格碼5碼：1st=1板金/2CNC，2nd=0陽極/1無陽極，3rd=0熱處理/1無熱處理，4th=0噴砂/1無噴砂，5th=0拉絲/1無拉絲', 13),
 ('product_line', 'MWS', 'Micro Warehouse System', '微型倉儲', 14),
-('product_line', 'OHB', 'OHB-N2配電盤', '', 15),
+('product_line', 'OHB', 'Overhead Hoist Buffer', 'OHB N2 充氣裝置，規格碼4碼：1st=0整機/1整合(不含電腦櫃/出機配件)/2LP/3操控面板/4電源開關/5配電盤/6人機/7箱體框架，2nd=0無分類/1A盤/2B盤，3rd=0無分類/1Normal/2UL，4th=0', 15),
 ('product_line', 'OPT', '光學元件類', '光學元件子系統', 16),
 ('product_line', 'PAC', '包裝/紙材類', '包裝材料子系統', 17),
 ('product_line', 'PDB', 'Power Distribution Board', '配電盤', 18),
