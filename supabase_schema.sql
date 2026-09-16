@@ -148,9 +148,10 @@ insert into lookup_items (list_name, code, label, note, sort_order) values
 ('material_class_num', '08', '橡膠/墊片', 'RuBbeR - O-Ring、緩衝墊、橡膠矽膠', 8),
 ('material_class_num', '09', '外購塑膠件', 'PLastic Part - 非自製之外購塑膠零件', 9),
 ('material_class_num', '99', '其他', 'OTHers - 未分類雜項', 10),
--- 客戶碼（F 客供料，固定6碼；聖凰/宜特/圓達尚未取得正式代碼，待業務提供後再補）
+-- 客戶碼（F 客供料，固定6碼；宜特/圓達尚未取得正式代碼，待業務提供後再補）
 ('customer_code', 'A00001', '家登', '', 1),
 ('customer_code', 'A00002', '碩頂', '', 2),
+('customer_code', 'A00003', '聖凰', '', 3),
 -- 客戶別代碼（M 模具／K 治具／S 檢具 共用，第2~3碼；依規範書第十二章對照表，後續新增客戶依序編號）
 ('tool_customer_code', '01', '圓達', '', 1),
 ('tool_customer_code', '02', '家登', '', 2),
