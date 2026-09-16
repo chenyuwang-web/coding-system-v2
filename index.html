@@ -183,6 +183,12 @@ body.has-bulk-bar { padding-bottom: 64px; }
             </div>
         </div>
         <div id="dynamicSegments" class="form-grid" style="margin-top:18px;"></div>
+        <div class="form-group" id="itemParentGroup" style="display:none;margin-top:18px;">
+            <label>所屬成品／半成品（選填，可複選）</label>
+            <div id="itemParentList" style="max-height:140px;overflow-y:auto;border:1.5px solid #ddd;border-radius:8px;padding:10px 12px;background:#fafafa;">
+                <span style="color:#999;font-size:0.85rem;">尚無成品／半成品可選</span>
+            </div>
+        </div>
         <div class="preview-box">
             <div class="label">編碼預覽</div>
             <div class="code" id="itemPreview">------</div>
@@ -441,6 +447,7 @@ const CATEGORY_DEFS = {
 };
 const TOP_LEVEL_CATS = ['A','B']; // 成品：BOM 樹的根
 const NON_BOM_CATS = ['M','K','S']; // 模具／治具／檢具：非銷售或庫存管理品項，不納入 BOM 結構
+const SEMI_LIKE_CATS = ['C','X']; // 半成品／虛擬階：可以當作 D/E/F/G/Z 或彼此的上層
 
 const LOOKUP_META = {
     product_class_a: '產品分類（A 成品新品／C 半成品／X 虛擬階）',
@@ -543,7 +550,34 @@ function onCategoryChange() {
         group.innerHTML = inner;
         wrap.appendChild(group);
     });
+    populateItemParentList();
     updateItemPreview();
+}
+
+// 建立料號時可複選的「所屬成品／半成品」；成品(A/B)本身跟模具/治具/檢具(M/K/S)不需要歸屬，整組隱藏
+function populateItemParentList() {
+    const group = document.getElementById('itemParentGroup');
+    const box = document.getElementById('itemParentList');
+    if (!group || !box) return;
+    const cat = document.getElementById('category').value;
+    if (!cat || TOP_LEVEL_CATS.includes(cat) || NON_BOM_CATS.includes(cat)) {
+        group.style.display = 'none';
+        return;
+    }
+    group.style.display = '';
+    const checked = new Set(Array.from(box.querySelectorAll('input:checked')).map(cb => cb.value));
+    const candidates = itemsCache.filter(it => TOP_LEVEL_CATS.includes(it.category) || SEMI_LIKE_CATS.includes(it.category))
+        .sort((a,b) => a.code.localeCompare(b.code));
+    if (!candidates.length) {
+        box.innerHTML = '<span style="color:#999;font-size:0.85rem;">尚無成品／半成品可選</span>';
+        return;
+    }
+    box.innerHTML = candidates.map(it => `
+        <label style="display:block;font-size:0.85rem;padding:2px 0;cursor:pointer;">
+            <input type="checkbox" value="${it.code}" ${checked.has(it.code) ? 'checked' : ''}>
+            <span class="cat-badge" style="font-size:0.68rem;padding:1px 6px;">${it.category}</span>
+            ${it.code}${it.description ? ' — ' + it.description.substring(0,30) : ''}
+        </label>`).join('');
 }
 
 function getSegValue(seg) {
@@ -624,13 +658,19 @@ async function addItem() {
     if (itemsCache.some(it => it.code === code)) { showMsg(`料號 ${code} 已存在`, 'error'); return; }
 
     const desc = document.getElementById('itemDesc').value.trim();
+    const parents = (!TOP_LEVEL_CATS.includes(cat) && !NON_BOM_CATS.includes(cat))
+        ? Array.from(document.querySelectorAll('#itemParentList input:checked')).map(cb => cb.value)
+        : [];
     document.getElementById('addItemBtn').disabled = true;
     try {
         const [row] = await DB.insert(TBL_ITEMS, {
             code, category: cat, category_label: def.label, segments: values, description: desc
         }, { onConflict: 'code', ignoreDup: true });
-        Logger.log('insert', code, { row });
-        showMsg(`料號 ${code} 新增成功！`, 'success');
+        if (parents.length) {
+            await DB.insert(TBL_BOM, parents.map(p => ({ parent_code: p, child_code: code })), { onConflict: 'parent_code,child_code', ignoreDup: true });
+        }
+        Logger.log('insert', code, { row, parents });
+        showMsg(parents.length ? `料號 ${code} 新增成功，已歸屬至 ${parents.join('、')}！` : `料號 ${code} 新增成功！`, 'success');
         resetItemForm();
         await loadAll();
         renderTable(); renderBomTree();
@@ -644,6 +684,8 @@ function resetItemForm() {
     document.getElementById('category').value = '';
     document.getElementById('dynamicSegments').innerHTML = '';
     document.getElementById('itemDesc').value = '';
+    document.getElementById('itemParentGroup').style.display = 'none';
+    document.getElementById('itemParentList').innerHTML = '';
     document.getElementById('itemPreview').textContent = '------';
     document.getElementById('itemBreakdown').textContent = '';
     document.getElementById('addItemBtn').disabled = true;
