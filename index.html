@@ -845,7 +845,7 @@ function renderItemsTable(items) {
         <td class="code-cell">${it.code}</td>
         <td><span class="cat-badge">${it.category}</span></td>
         <td>${it.description || '-'}</td>
-        <td>${parentCodesOf(it.code).length ? parentCodesOf(it.code).map(p=>`<span class="code-cell" style="font-size:0.8rem;">${p}</span>`).join('<br>') : '-'}</td>
+        <td>${parentCodesOf(it.code).length ? parentCodesOf(it.code).map(p=>`<span class="code-cell" style="font-size:0.8rem;">${p}</span>`).join('<br>') : '-'}${renderAddParentSelect(it)}</td>
         <td>${it.status}</td>
         <td style="font-size:0.8rem;color:#888;">${it.created_at ? new Date(it.created_at).toLocaleDateString('zh-TW') : ''}</td>
         <td class="action-btns">
@@ -854,6 +854,20 @@ function renderItemsTable(items) {
         </td>
     </tr>`).join('')}
     </tbody></table>`;
+}
+
+// 已建立料號清單裡「所屬上階」欄位的追加歸屬小選單：不管目前有沒有歸屬都能加，
+// 共用件常常同時用在好幾個成品/半成品裡，不用跑去編輯彈窗才能補第二個歸屬
+function renderAddParentSelect(it) {
+    if (TOP_LEVEL_CATS.includes(it.category) || NON_BOM_CATS.includes(it.category)) return '';
+    const existing = new Set(parentCodesOf(it.code));
+    const candidates = itemsCache.filter(c => c.code !== it.code && VALID_PARENT_CATS.includes(c.category) && !existing.has(c.code))
+        .sort((a,b) => a.code.localeCompare(b.code));
+    if (!candidates.length) return '';
+    return `<select class="assign-parent-select" style="margin-top:4px;font-size:0.72rem;max-width:160px;" onchange="assignParentInline('${it.code}', this.value); this.value='';">
+        <option value="">＋ 新增歸屬…</option>
+        ${candidates.map(c => `<option value="${c.code}">${c.category} - ${c.code}${c.description ? ' · ' + c.description.substring(0,16) : ''}</option>`).join('')}
+    </select>`;
 }
 
 function bindRowCheckboxes() {}
