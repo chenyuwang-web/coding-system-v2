@@ -447,7 +447,7 @@ const CATEGORY_DEFS = {
 };
 const TOP_LEVEL_CATS = ['A','B']; // 成品：BOM 樹的根
 const NON_BOM_CATS = ['M','K','S']; // 模具／治具／檢具：非銷售或庫存管理品項，不納入 BOM 結構
-const VALID_PARENT_CATS = ['A','B','C']; // 可以當作歸屬上層的類別：成品(A/B)、半成品(C)；X/D/E/F/G/Z 只能當子項，不能當上層
+const VALID_PARENT_CATS = ['A','B','C','X']; // 可以當作歸屬上層的類別：成品(A/B)、半成品(C)、虛擬階(X，本來就是為了BOM完整性設計的容器)；D/E/F/G/Z 只能當子項，不能當上層
 
 const LOOKUP_META = {
     product_class_a: '產品分類（A 成品新品／C 半成品／X 虛擬階）',
