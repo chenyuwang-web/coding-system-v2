@@ -1151,14 +1151,31 @@ function renderBomChildren(parentCode, childrenMap, depth) {
 }
 
 function renderAssignRow(it) {
+    const candidates = itemsCache.filter(c => c.code !== it.code && (TOP_LEVEL_CATS.includes(c.category) || SEMI_LIKE_CATS.includes(c.category)))
+        .sort((a,b) => a.code.localeCompare(b.code));
     return `<div class="bom-node">
         <span class="cat-badge">${it.category}</span>
         <span class="bom-code">${it.code}</span>
         <span class="bom-desc">${it.description || ''}</span>
         <span class="bom-actions">
-            <button class="assign-btn" onclick="quickFillChild('${it.code}')">↑ 用上面的快速加入指派</button>
+            <select class="assign-parent-select" onchange="assignParentInline('${it.code}', this.value)">
+                <option value="">-- 選擇成品／半成品 --</option>
+                ${candidates.map(c => `<option value="${c.code}">${c.category} - ${c.code}${c.description ? ' · ' + c.description.substring(0,20) : ''}</option>`).join('')}
+            </select>
+            <button class="assign-btn" onclick="quickFillChild('${it.code}')">↑ 或用上面快速加入設數量/單位</button>
         </span>
     </div>`;
+}
+
+// 在「未歸屬」清單裡直接選成品/半成品指派，不用跑去上面的快速加入列
+async function assignParentInline(childCode, parentCode) {
+    if (!parentCode) return;
+    try {
+        await DB.insert(TBL_BOM, { parent_code: parentCode, child_code: childCode }, { onConflict: 'parent_code,child_code', ignoreDup: true });
+        Logger.log('assign_parent', childCode, { parent_code: parentCode });
+        showMsg(`已將 ${childCode} 加入 ${parentCode} 的 BOM`, 'success', 'bomMsg');
+        await loadAll(); renderBomTree(); renderTable();
+    } catch (e) { showMsg('加入失敗：' + (e.message||e), 'error', 'bomMsg'); }
 }
 
 // 快速加入工具：選料號 + 選要加到哪個成品，一次搞定，不用在樹狀圖裡逐項找按鈕
