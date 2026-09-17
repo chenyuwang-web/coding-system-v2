@@ -881,6 +881,21 @@ function openEditModal(code) {
     if (!item) return;
     const body = ensureModal('編輯料號');
     const descEsc = (item.description || '').replace(/"/g, '&quot;');
+    const needsParent = !TOP_LEVEL_CATS.includes(item.category) && !NON_BOM_CATS.includes(item.category);
+    const curParents = new Set(parentCodesOf(item.code));
+    const parentHtml = needsParent ? `
+        <div class="form-group">
+            <label>所屬成品／半成品（選填，可複選）</label>
+            <div id="editParentList" style="max-height:140px;overflow-y:auto;border:1.5px solid #ddd;border-radius:8px;padding:10px 12px;background:#fafafa;">
+                ${itemsCache.filter(it => it.code !== item.code && (TOP_LEVEL_CATS.includes(it.category) || SEMI_LIKE_CATS.includes(it.category)))
+                    .sort((a,b) => a.code.localeCompare(b.code))
+                    .map(it => `<label style="display:block;font-size:0.85rem;padding:2px 0;cursor:pointer;">
+                        <input type="checkbox" value="${it.code}" ${curParents.has(it.code) ? 'checked' : ''}>
+                        <span class="cat-badge" style="font-size:0.68rem;padding:1px 6px;">${it.category}</span>
+                        ${it.code}${it.description ? ' — ' + it.description.substring(0,30) : ''}
+                    </label>`).join('') || '<span style="color:#999;font-size:0.85rem;">尚無成品／半成品可選</span>'}
+            </div>
+        </div>` : '';
     body.innerHTML = `
         <div class="form-grid">
             <div class="form-group">
@@ -898,6 +913,7 @@ function openEditModal(code) {
                     ${['啟用','草稿','停用','淘汰'].map(s => `<option value="${s}" ${s===item.status?'selected':''}>${s}</option>`).join('')}
                 </select>
             </div>
+            ${parentHtml}
         </div>
         <div id="editModalMsg" class="msg"></div>
         <div class="btn-row" style="justify-content:flex-start;">
@@ -923,11 +939,28 @@ async function saveItemEdit(origCode) {
             return;
         }
     }
+    const parentBox = document.getElementById('editParentList');
+    const newParents = parentBox ? Array.from(parentBox.querySelectorAll('input:checked')).map(cb => cb.value) : null;
     try {
         const fields = { description: newDesc, status: newStatus };
         if (newCode !== origCode) fields.code = newCode;
         await DB.update(TBL_ITEMS, 'code', origCode, fields);
         Logger.log('update', origCode, fields);
+
+        if (newParents !== null) {
+            const finalCode = newCode !== origCode ? newCode : origCode;
+            const curParents = parentCodesOf(origCode); // 改名前的舊代碼查，loadAll() 還沒重新抓
+            const toAdd = newParents.filter(p => !curParents.includes(p));
+            const toRemove = curParents.filter(p => !newParents.includes(p));
+            await Promise.all([
+                ...(toAdd.length ? [DB.insert(TBL_BOM, toAdd.map(p => ({ parent_code: p, child_code: finalCode })), { onConflict: 'parent_code,child_code', ignoreDup: true })] : []),
+                ...toRemove.map(p => {
+                    const link = bomLinksCache.find(l => l.parent_code === p && l.child_code === origCode);
+                    return link ? DB.remove(TBL_BOM, 'id', link.id) : null;
+                })
+            ]);
+        }
+
         closeModal();
         showMsg(newCode !== origCode ? `已將 ${origCode} 改成 ${newCode}` : '已更新', 'success', 'listMsg');
         await loadAll(); renderTable(); renderBomTree();
