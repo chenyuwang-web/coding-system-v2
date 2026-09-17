@@ -447,7 +447,7 @@ const CATEGORY_DEFS = {
 };
 const TOP_LEVEL_CATS = ['A','B']; // 成品：BOM 樹的根
 const NON_BOM_CATS = ['M','K','S']; // 模具／治具／檢具：非銷售或庫存管理品項，不納入 BOM 結構
-const SEMI_LIKE_CATS = ['C','X']; // 半成品／虛擬階：可以當作 D/E/F/G/Z 或彼此的上層
+const VALID_PARENT_CATS = ['A','B','C']; // 可以當作歸屬上層的類別：成品(A/B)、半成品(C)；X/D/E/F/G/Z 只能當子項，不能當上層
 
 const LOOKUP_META = {
     product_class_a: '產品分類（A 成品新品／C 半成品／X 虛擬階）',
@@ -566,7 +566,7 @@ function populateItemParentList() {
     }
     group.style.display = '';
     const checked = new Set(Array.from(box.querySelectorAll('input:checked')).map(cb => cb.value));
-    const candidates = itemsCache.filter(it => TOP_LEVEL_CATS.includes(it.category) || SEMI_LIKE_CATS.includes(it.category))
+    const candidates = itemsCache.filter(it => VALID_PARENT_CATS.includes(it.category))
         .sort((a,b) => a.code.localeCompare(b.code));
     if (!candidates.length) {
         box.innerHTML = '<span style="color:#999;font-size:0.85rem;">尚無成品／半成品可選</span>';
@@ -887,7 +887,7 @@ function openEditModal(code) {
         <div class="form-group">
             <label>所屬成品／半成品（選填，可複選）</label>
             <div id="editParentList" style="max-height:140px;overflow-y:auto;border:1.5px solid #ddd;border-radius:8px;padding:10px 12px;background:#fafafa;">
-                ${itemsCache.filter(it => it.code !== item.code && (TOP_LEVEL_CATS.includes(it.category) || SEMI_LIKE_CATS.includes(it.category)))
+                ${itemsCache.filter(it => it.code !== item.code && VALID_PARENT_CATS.includes(it.category))
                     .sort((a,b) => a.code.localeCompare(b.code))
                     .map(it => `<label style="display:block;font-size:0.85rem;padding:2px 0;cursor:pointer;">
                         <input type="checkbox" value="${it.code}" ${curParents.has(it.code) ? 'checked' : ''}>
@@ -1151,7 +1151,7 @@ function renderBomChildren(parentCode, childrenMap, depth) {
 }
 
 function renderAssignRow(it) {
-    const candidates = itemsCache.filter(c => c.code !== it.code && (TOP_LEVEL_CATS.includes(c.category) || SEMI_LIKE_CATS.includes(c.category)))
+    const candidates = itemsCache.filter(c => c.code !== it.code && VALID_PARENT_CATS.includes(c.category))
         .sort((a,b) => a.code.localeCompare(b.code));
     return `<div class="bom-node">
         <span class="cat-badge">${it.category}</span>
@@ -1184,10 +1184,12 @@ function populateQuickAdd() {
     const parentSel = document.getElementById('qaParent');
     if (!childSel || !parentSel) return;
     const keepChild = childSel.value, keepParent = parentSel.value;
-    const opts = itemsCache.filter(c => !NON_BOM_CATS.includes(c.category)).slice().sort((a,b)=>a.code.localeCompare(b.code))
+    const childOpts = itemsCache.filter(c => !NON_BOM_CATS.includes(c.category)).slice().sort((a,b)=>a.code.localeCompare(b.code))
         .map(c => `<option value="${c.code}">${c.code} — ${c.category} ${c.description||''}</option>`).join('');
-    childSel.innerHTML = '<option value="">-- 選擇要加入的料號 --</option>' + opts;
-    parentSel.innerHTML = '<option value="">-- 選擇上階成品／半成品 --</option>' + opts;
+    const parentOpts = itemsCache.filter(c => VALID_PARENT_CATS.includes(c.category)).slice().sort((a,b)=>a.code.localeCompare(b.code))
+        .map(c => `<option value="${c.code}">${c.code} — ${c.category} ${c.description||''}</option>`).join('');
+    childSel.innerHTML = '<option value="">-- 選擇要加入的料號 --</option>' + childOpts;
+    parentSel.innerHTML = '<option value="">-- 選擇上階成品／半成品 --</option>' + parentOpts;
     childSel.value = keepChild; parentSel.value = keepParent;
 }
 
