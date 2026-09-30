@@ -92,7 +92,7 @@ insert into lookup_items (list_name, code, label, note, sort_order) values
 -- 產品分類（B 成品維修品 第2碼）
 ('product_class_b', 'W', '清洗封裝', '僅用於客供清洗件', 1),
 -- 產品線代碼（A/B/C/X 共用，第3~5碼／成品名稱；依英文字母排序）
-('product_line', 'AOI', 'Automatic Optical Inspection', '自動光學檢測設備', 1),
+('product_line', 'AOI', 'Automated Optical Inspection', 'AOI 自動化設備，規格碼4碼：1st=1-Fosb/2-Foup，2nd=0-12"，3rd=0-10支，4th=0燒/1不燒', 1),
 ('product_line', 'ASM', '機構組裝類', '機構組裝子系統', 2),
 ('product_line', 'ATM', 'Auto Transfer Machine', '自動搬運機', 3),
 ('product_line', 'CAB', '線材/線纜類', '線材線纜子系統', 4),
@@ -107,7 +107,7 @@ insert into lookup_items (list_name, code, label, note, sort_order) values
 ('product_line', 'MAS', 'MASk box', '光罩盒/大尺寸光罩盒，依型號定義規格碼', 12),
 ('product_line', 'MEC', '金屬材料/加工件類', '金屬加工件，規格碼5碼：1st=1板金/2CNC，2nd=0陽極/1無陽極，3rd=0熱處理/1無熱處理，4th=0噴砂/1無噴砂，5th=0拉絲/1無拉絲', 13),
 ('product_line', 'MWS', 'Micro Warehouse System', '微型倉儲', 14),
-('product_line', 'OHB', 'Overhead Hoist Buffer', 'OHB N2 充氣裝置，規格碼4碼：1st=0整機/1整合(不含電腦櫃/出機配件)/2LP/3操控面板/4電源開關/5配電盤/6人機/7箱體框架，2nd=0無分類/1A盤/2B盤，3rd=0無分類/1Normal/2UL，4th=0', 15),
+('product_line', 'OHB', 'Overhead Hoist Buffer', 'OHB N2 充氣裝置，規格碼4碼：1st=1整機/2模組，2nd=0不分類/1L-P盤A/2L-P盤-B，3rd=0不分類/1Normal/2UL，4th=0', 15),
 ('product_line', 'OPT', '光學元件類', '光學元件子系統', 16),
 ('product_line', 'PAC', '包裝/紙材類', '包裝材料子系統', 17),
 ('product_line', 'PDB', 'Power Distribution Board', '配電盤', 18),
@@ -119,6 +119,9 @@ insert into lookup_items (list_name, code, label, note, sort_order) values
 ('product_line', 'RUB', '橡膠/矽膠類', '橡膠矽膠子系統', 24),
 ('product_line', 'SCD', 'Specialty Chemical Drum', '特用化學桶，裝填容量(L)如200L=0200', 25),
 ('product_line', 'TRA', '傳動元件類', '傳動元件子系統', 26),
+('product_line', 'OGS', 'One Glass Solution', '微程式－單片式玻璃解決方案，規格碼4碼：1st=1整機/2模組，2nd=0整機/1測試台/2sensor，3rd=0，4th=0', 28),
+('product_line', 'MFC', 'Mass Flow Controller', '微程式－質量流量控制器，規格碼4碼：1st=1壓插/2熱插，2nd=0-20sccm/1-50sccm/2-100sccm，3rd=0-9pin/1-15pin/2-25pin/3-VGA，4th=0', 29),
+('product_line', 'MAC', 'Mask Assembly Cell', '光罩盒組裝，規格碼4碼：1st=1-5吋/2-6吋/3-9吋/4-RSP150/5-RSP200，2nd=0一體式/1二件式，3rd=0不加熱/1加熱，4th=0燒/1不燒', 30),
 -- 原料類別碼（D 原料 第2~4碼，材質未達3碼以Z補足）
 ('raw_material_class', 'PFA', 'PFA', '全氟烷氧基聚合物', 1),
 ('raw_material_class', 'PPS', 'PPS', '聚苯硫醚', 2),
