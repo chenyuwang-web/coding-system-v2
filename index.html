@@ -1136,7 +1136,7 @@ function renderBomTree() {
             <span class="arrow">&#9654;</span>
         </div>
         <div class="bom-product-body ${isOpen('__unassigned__')?'open':''}">
-            ${unassigned.length ? unassigned.map(it => renderAssignRow(it)).join('') : '<div class="empty-state">全部料號都至少歸屬一個成品了</div>'}
+            ${unassigned.length ? unassigned.map(it => renderAssignRow(it, childrenMap)).join('') : '<div class="empty-state">全部料號都至少歸屬一個成品了</div>'}
         </div>
     </div>`;
 
@@ -1191,7 +1191,7 @@ async function addBomChildInline(parentCode, selectEl) {
     } catch (e) { showMsg('加入失敗：' + (e.message||e), 'error', 'bomMsg'); }
 }
 
-function renderAssignRow(it) {
+function renderAssignRow(it, childrenMap) {
     const candidates = itemsCache.filter(c => c.code !== it.code && VALID_PARENT_CATS.includes(c.category))
         .sort((a,b) => a.code.localeCompare(b.code));
     return `<div class="bom-node">
@@ -1205,7 +1205,8 @@ function renderAssignRow(it) {
             </select>
             <button class="assign-btn" onclick="quickFillChild('${it.code}')">↑ 或用上面快速加入設數量/單位</button>
         </span>
-    </div>`;
+    </div>
+    ${renderBomChildren(it.code, childrenMap, 1)}`;
 }
 
 // 在「未歸屬」清單裡直接選成品/半成品指派，不用跑去上面的快速加入列
