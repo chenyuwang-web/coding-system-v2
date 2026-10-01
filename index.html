@@ -1145,8 +1145,7 @@ function renderBomTree() {
 
 function renderBomChildren(parentCode, childrenMap, depth) {
     const kids = (childrenMap[parentCode] || []).slice().sort((a,b)=>a.item.code.localeCompare(b.item.code));
-    if (!kids.length) return '';
-    return kids.map(({link, item:k}) => {
+    const kidsHtml = kids.map(({link, item:k}) => {
         const otherParents = parentCodesOf(k.code).filter(p => p !== parentCode);
         return `
         <div class="bom-node" style="padding-left:${depth*18}px;">
@@ -1162,6 +1161,34 @@ function renderBomChildren(parentCode, childrenMap, depth) {
         </div>
         ${renderBomChildren(k.code, childrenMap, depth+1)}
     `;}).join('');
+    return kidsHtml + renderAddChildRow(parentCode, depth);
+}
+
+// 在每個展開的成品／子件區塊底部，直接可以選一個子件加入這個節點的 BOM，
+// 不用跑到最上面的快速加入列重新選一次上階
+function renderAddChildRow(parentCode, depth) {
+    const existingChildren = new Set(bomLinksCache.filter(l => l.parent_code === parentCode).map(l => l.child_code));
+    const candidates = itemsCache.filter(c => c.code !== parentCode && !NON_BOM_CATS.includes(c.category) && !existingChildren.has(c.code))
+        .sort((a,b) => a.code.localeCompare(b.code));
+    if (!candidates.length) return '';
+    return `<div class="bom-node" style="padding-left:${depth*18}px;">
+        <select class="assign-parent-select" style="max-width:260px;">
+            <option value="">-- 選擇要加入的子件 --</option>
+            ${candidates.map(c => `<option value="${c.code}">${c.category} - ${c.code}${c.description ? ' · ' + c.description.substring(0,20) : ''}</option>`).join('')}
+        </select>
+        <button class="assign-btn" onclick="addBomChildInline('${parentCode}', this.previousElementSibling)">＋ 加入子件</button>
+    </div>`;
+}
+
+async function addBomChildInline(parentCode, selectEl) {
+    const child = selectEl ? selectEl.value : '';
+    if (!child) return;
+    try {
+        await DB.insert(TBL_BOM, { parent_code: parentCode, child_code: child }, { onConflict: 'parent_code,child_code', ignoreDup: true });
+        Logger.log('assign_parent', child, { parent_code: parentCode });
+        showMsg(`已將 ${child} 加入 ${parentCode} 的 BOM`, 'success', 'bomMsg');
+        await loadAll(); renderBomTree(); renderTable();
+    } catch (e) { showMsg('加入失敗：' + (e.message||e), 'error', 'bomMsg'); }
 }
 
 function renderAssignRow(it) {
