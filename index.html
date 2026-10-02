@@ -1143,15 +1143,32 @@ function renderBomTree() {
     wrap.innerHTML = html;
 }
 
-function renderBomChildren(parentCode, childrenMap, depth) {
+// 節點展開狀態以「路徑」為 key（成品>半成品>虛擬階…），因為共用件會在好幾條路徑下各出現一次，
+// 各自要能獨立展開/收合；預設收合，點一下才往下展開一層
+function toggleBomNode(pathKey) {
+    expandedBomGroups.set(pathKey, expandedBomGroups.get(pathKey) !== true);
+    renderBomTree();
+}
+
+function renderBomChildren(parentCode, childrenMap, depth, path) {
+    path = path || parentCode;
     const kids = (childrenMap[parentCode] || []).slice().sort((a,b)=>a.item.code.localeCompare(b.item.code));
     const kidsHtml = kids.map(({link, item:k}) => {
         const otherParents = parentCodesOf(k.code).filter(p => p !== parentCode);
+        const kidPath = path + '>' + k.code;
+        const grandKids = childrenMap[k.code] || [];
+        const inCycle = path.split('>').includes(k.code); // 防呆：路徑上已經出現過就不再往下，避免循環參照無窮展開
+        const expandable = !inCycle && (grandKids.length > 0 || VALID_PARENT_CATS.includes(k.category));
+        const open = expandable && expandedBomGroups.get(kidPath) === true;
         return `
         <div class="bom-node" style="padding-left:${depth*18}px;">
+            ${expandable
+                ? `<span class="arrow" style="cursor:pointer;display:inline-block;width:14px;font-size:0.75rem;color:#888;transition:transform 0.2s;${open ? 'transform:rotate(90deg);' : ''}" onclick="toggleBomNode('${kidPath}')">&#9654;</span>`
+                : '<span style="display:inline-block;width:14px;"></span>'}
             <span class="cat-badge">${k.category}</span>
-            <span class="bom-code">${k.code}</span>
+            <span class="bom-code" ${expandable ? `style="cursor:pointer;" onclick="toggleBomNode('${kidPath}')"` : ''}>${k.code}</span>
             <span class="bom-desc">${k.description || ''}</span>
+            ${grandKids.length ? `<span class="bom-meta">${grandKids.length} 個子項</span>` : ''}
             ${otherParents.length ? `<span class="bom-meta">也用在：${otherParents.join('、')}</span>` : ''}
             <span class="bom-actions">
                 <input type="number" class="qty-input" placeholder="數量" value="${link.quantity ?? ''}" onchange="updateBomQty(${link.id},this.value,null)">
@@ -1159,7 +1176,7 @@ function renderBomChildren(parentCode, childrenMap, depth) {
                 <button class="assign-btn" onclick="removeLink(${link.id})">移出</button>
             </span>
         </div>
-        ${renderBomChildren(k.code, childrenMap, depth+1)}
+        ${open ? renderBomChildren(k.code, childrenMap, depth+1, kidPath) : ''}
     `;}).join('');
     return kidsHtml + renderAddChildRow(parentCode, depth);
 }
