@@ -550,6 +550,16 @@ function onCategoryChange() {
         group.innerHTML = inner;
         wrap.appendChild(group);
     });
+    if (ASM_CATS.includes(cat)) {
+        const group = document.createElement('div');
+        group.className = 'form-group';
+        group.innerHTML = `<label>組裝屬性（決定流水號區間）</label>
+            <select id="seg_asm" onchange="updateItemPreview()">
+                <option value="S">單一製程件（流水號 0001～4999）</option>
+                <option value="A">組立件（流水號 5000～9999，由2個以上半成品／物料組裝而成）</option>
+            </select>`;
+        wrap.appendChild(group);
+    }
     populateItemParentList();
     updateItemPreview();
 }
@@ -586,15 +596,25 @@ function getSegValue(seg) {
     return el ? el.value.trim().toUpperCase() : '';
 }
 
-function getNextSerial(cat, prefix, serialLen) {
+// C/X 半成品流水號千位為組裝屬性旗標（規範書第四章）：0~4 開頭＝單一製程件 0001~4999，5~9 開頭＝組立件 5000~9999
+const ASM_CATS = ['C', 'X'];
+const ASM_RANGE = { S: [1, 4999], A: [5000, 9999] };
+function getAsmMode(cat) {
+    if (!ASM_CATS.includes(cat)) return null;
+    const el = document.getElementById('seg_asm');
+    return el && el.value === 'A' ? 'A' : 'S';
+}
+
+function getNextSerial(cat, prefix, serialLen, asmMode) {
     // 生效中跟回收桶裡的料號都要算進去，避免自動流水號撞到已刪除但還沒被清空回收桶的號碼
-    const used = [...itemsCache, ...deletedItemsCache]
+    const used = new Set([...itemsCache, ...deletedItemsCache]
         .filter(it => it.category === cat && it.code.startsWith(prefix) && it.code.length === prefix.length + serialLen)
         .map(it => parseInt(it.code.slice(prefix.length)))
-        .filter(n => !isNaN(n))
-        .sort((a,b)=>a-b);
-    let next = 1;
-    for (const n of used) { if (n === next) next++; else break; }
+        .filter(n => !isNaN(n)));
+    const [lo, hi] = asmMode ? ASM_RANGE[asmMode] : [1, Math.pow(10, serialLen) - 1];
+    let next = lo;
+    while (used.has(next)) next++;
+    if (next > hi) return null;   // 該區間流水號已用完
     return String(next).padStart(serialLen, '0');
 }
 
@@ -620,7 +640,13 @@ function updateItemPreview() {
 
     const prefix = nonSerial.map(s => values[s.key]).join('');
     const serialSeg = def.segments.find(s => s.type === 'serial');
-    const serial = getNextSerial(cat, prefix, serialSeg.len);
+    const asmMode = getAsmMode(cat);
+    const serial = getNextSerial(cat, prefix, serialSeg.len, asmMode);
+    if (serial === null) {
+        previewEl.textContent = '------'; breakdownEl.textContent = '';
+        showMsg('此組裝屬性的流水號區間已用完，請改選另一種組裝屬性或洽研發部', 'error');
+        btn.disabled = true; return;
+    }
     const code = prefix + serial;
     previewEl.textContent = code;
     breakdownEl.textContent = nonSerial.filter(s=>s.type!=='fixed').map(s => `${s.label}=${values[s.key]}`).join('　') + `　流水號=${serial}（自動）`;
@@ -651,7 +677,8 @@ async function addItem() {
     nonSerial.forEach(seg => { values[seg.key] = getSegValue(seg); });
     const prefix = nonSerial.map(s => values[s.key]).join('');
     const serialSeg = def.segments.find(s => s.type === 'serial');
-    const serial = getNextSerial(cat, prefix, serialSeg.len);
+    const serial = getNextSerial(cat, prefix, serialSeg.len, getAsmMode(cat));
+    if (serial === null) { showMsg('此組裝屬性的流水號區間已用完', 'error'); return; }
     const code = prefix + serial;
     values.serial = serial;
 
