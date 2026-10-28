@@ -1,0 +1,19 @@
+name: Supabase keep-alive
+
+# 免費方案的 Supabase 專案閒置約 7 天會被自動暫停，每 3 天對資料庫發一個輕量查詢保持活躍。
+# 回應不是 2xx 時這個 workflow 會失敗，GitHub 會寄通知信，等於順便當資料庫異常警報。
+on:
+  schedule:
+    - cron: '17 3 */3 * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query Supabase
+        run: |
+          curl --fail --silent --show-error --max-time 30 \
+            -H "apikey: sb_publishable_fKlhbQJRQR8IowwaPWhf3w_5V3ETjs9" \
+            -H "Authorization: Bearer sb_publishable_fKlhbQJRQR8IowwaPWhf3w_5V3ETjs9" \
+            "https://xrfvclmzmxpwbzkouiby.supabase.co/rest/v1/lookup_items?select=id&limit=1"
