@@ -1,36 +1,84 @@
-name: Supabase keep-alive
+name: Supabase keep-alive + auto-restore
 
-# 免費方案的 Supabase 專案閒置會被自動暫停。每天對資料庫做一次「寫入再刪除」，
-# 比單純讀取更確定算作資料庫活動，而且寫完立刻刪除，不留任何殘留資料。
-# 任何一步失敗（含連網址都解析不到＝專案已被暫停）workflow 都會失敗，GitHub 會寄通知信。
+# 每 6 小時檢查一次資料庫：
+#   1. 正常 → 寫入一筆心跳資料再刪除（保持活躍，不留殘留）
+#   2. 連不上 → 用 Supabase Management API 查專案狀態，被暫停就自動呼叫還原，
+#      然後輪詢等它啟動完成（最多約 12 分鐘）
+# 需要在這個 repo 的 Settings → Secrets and variables → Actions 新增 SUPABASE_ACCESS_TOKEN。
+# 還原失敗、或等太久仍連不上時 workflow 會失敗，GitHub 會寄通知信。
 on:
   schedule:
-    - cron: '17 3 * * *'
+    - cron: '17 */6 * * *'
   workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     env:
-      BASE: https://xrfvclmzmxpwbzkouiby.supabase.co/rest/v1
+      PROJECT_REF: xrfvclmzmxpwbzkouiby
       KEY: sb_publishable_fKlhbQJRQR8IowwaPWhf3w_5V3ETjs9
+      READ_TABLE: lookup_items?select=id&limit=1
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
     steps:
-      - name: Write + delete a heartbeat row
+      - name: Check, keep alive, auto-restore if paused
         run: |
-          set -euo pipefail
-          CURL="curl --fail --silent --show-error --max-time 30 --retry 3 --retry-delay 10 --retry-all-errors"
-          ID=$($CURL -X POST "$BASE/operation_logs" \
-            -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
-            -H "Content-Type: application/json" -H "Prefer: return=representation" \
-            -d '{"action":"keepalive","detail":{"source":"github-actions"}}' | jq -r '.[0].id')
-          echo "inserted heartbeat id=$ID"
-          test -n "$ID" && test "$ID" != "null"
-          $CURL -X DELETE "$BASE/operation_logs?id=eq.$ID" \
-            -H "apikey: $KEY" -H "Authorization: Bearer $KEY"
-          echo "heartbeat removed"
-      - name: Read check
-        run: |
-          curl --fail --silent --show-error --max-time 30 --retry 3 --retry-delay 10 --retry-all-errors \
-            -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
-            "$BASE/lookup_items?select=id&limit=1" > /dev/null
-          echo "read ok"
+          set -uo pipefail
+          BASE="https://${PROJECT_REF}.supabase.co/rest/v1"
+
+          # 寫入一筆心跳再刪除，再讀一次；全部成功才回傳 0。$1 = curl 重試次數
+          db_ok() {
+            local C="curl --fail --silent --show-error --max-time 30 --retry $1 --retry-delay 10 --retry-all-errors"
+            local ID
+            ID=$($C -X POST "$BASE/operation_logs" \
+              -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
+              -H "Content-Type: application/json" -H "Prefer: return=representation" \
+              -d '{"action":"keepalive","detail":{"source":"github-actions"}}' 2>/dev/null | jq -r '.[0].id' 2>/dev/null) || return 1
+            [ -n "$ID" ] && [ "$ID" != "null" ] || return 1
+            $C -X DELETE "$BASE/operation_logs?id=eq.$ID" -H "apikey: $KEY" -H "Authorization: Bearer $KEY" >/dev/null 2>&1 || return 1
+            $C -H "apikey: $KEY" -H "Authorization: Bearer $KEY" "$BASE/$READ_TABLE" >/dev/null 2>&1 || return 1
+            return 0
+          }
+
+          if db_ok 3; then
+            echo "database healthy, heartbeat written and removed"
+            exit 0
+          fi
+
+          echo "::warning::database unreachable, checking project status via Management API"
+          if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+            echo "::error::SUPABASE_ACCESS_TOKEN secret is not set, cannot auto-restore"
+            exit 1
+          fi
+
+          API="https://api.supabase.com/v1/projects/${PROJECT_REF}"
+          STATUS=$(curl --silent --max-time 30 -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "$API" | jq -r '.status // empty')
+          echo "project status: ${STATUS:-<none>}"
+          if [ -z "$STATUS" ]; then
+            echo "::error::could not read project status (token invalid, wrong scope, or project removed)"
+            exit 1
+          fi
+
+          case "$STATUS" in
+            ACTIVE_HEALTHY|COMING_UP|RESTORING|UPGRADING)
+              echo "project already up or starting, just waiting for the database" ;;
+            *)
+              echo "restoring project (status was $STATUS)"
+              CODE=$(curl --silent --output /tmp/restore.json --write-out '%{http_code}' --max-time 60 \
+                -X POST -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "$API/restore")
+              echo "restore HTTP $CODE: $(cat /tmp/restore.json)"
+              case "$CODE" in
+                2*) echo "::warning::project was $STATUS, auto-restore requested" ;;
+                *)  echo "::error::restore request failed"; exit 1 ;;
+              esac ;;
+          esac
+
+          for i in $(seq 1 36); do
+            sleep 20
+            if db_ok 0; then
+              echo "database is back after about $((i*20)) seconds"
+              exit 0
+            fi
+            echo "waiting... ($i/36)"
+          done
+          echo "::error::database still unreachable about 12 minutes after restore"
+          exit 1
