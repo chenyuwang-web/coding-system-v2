@@ -1,19 +1,36 @@
 name: Supabase keep-alive
 
-# 免費方案的 Supabase 專案閒置約 7 天會被自動暫停，每 3 天對資料庫發一個輕量查詢保持活躍。
-# 回應不是 2xx 時這個 workflow 會失敗，GitHub 會寄通知信，等於順便當資料庫異常警報。
+# 免費方案的 Supabase 專案閒置會被自動暫停。每天對資料庫做一次「寫入再刪除」，
+# 比單純讀取更確定算作資料庫活動，而且寫完立刻刪除，不留任何殘留資料。
+# 任何一步失敗（含連網址都解析不到＝專案已被暫停）workflow 都會失敗，GitHub 會寄通知信。
 on:
   schedule:
-    - cron: '17 3 */3 * *'
+    - cron: '17 3 * * *'
   workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
+    env:
+      BASE: https://xrfvclmzmxpwbzkouiby.supabase.co/rest/v1
+      KEY: sb_publishable_fKlhbQJRQR8IowwaPWhf3w_5V3ETjs9
     steps:
-      - name: Query Supabase
+      - name: Write + delete a heartbeat row
         run: |
-          curl --fail --silent --show-error --max-time 30 \
-            -H "apikey: sb_publishable_fKlhbQJRQR8IowwaPWhf3w_5V3ETjs9" \
-            -H "Authorization: Bearer sb_publishable_fKlhbQJRQR8IowwaPWhf3w_5V3ETjs9" \
-            "https://xrfvclmzmxpwbzkouiby.supabase.co/rest/v1/lookup_items?select=id&limit=1"
+          set -euo pipefail
+          CURL="curl --fail --silent --show-error --max-time 30 --retry 3 --retry-delay 10 --retry-all-errors"
+          ID=$($CURL -X POST "$BASE/operation_logs" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
+            -H "Content-Type: application/json" -H "Prefer: return=representation" \
+            -d '{"action":"keepalive","detail":{"source":"github-actions"}}' | jq -r '.[0].id')
+          echo "inserted heartbeat id=$ID"
+          test -n "$ID" && test "$ID" != "null"
+          $CURL -X DELETE "$BASE/operation_logs?id=eq.$ID" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $KEY"
+          echo "heartbeat removed"
+      - name: Read check
+        run: |
+          curl --fail --silent --show-error --max-time 30 --retry 3 --retry-delay 10 --retry-all-errors \
+            -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
+            "$BASE/lookup_items?select=id&limit=1" > /dev/null
+          echo "read ok"
